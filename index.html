@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#f7f8f3">
+    <title>Месяц прогресса</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="manifest" href="manifest.webmanifest?v=16">
+    <link rel="stylesheet" href="styles.css?v=16">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">4 июля - 4 августа</p>
+          <h1>Календарь месяца</h1>
+        </div>
+        <button class="icon-button profile-button" id="profileButton" type="button" aria-label="Открыть профиль" title="Профиль">
+          <img id="profileButtonPhoto" alt="" hidden>
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"></path>
+            <path d="M4.5 20a7.5 7.5 0 0 1 15 0"></path>
+          </svg>
+        </button>
+      </header>
+
+      <section class="calendar-panel" aria-label="Календарь">
+        <div class="month-head">
+          <div>
+            <p class="eyebrow">Нажми на дату, чтобы открыть задачи</p>
+            <h2>Июль - август</h2>
+          </div>
+          <div class="streak-chip" aria-label="Серия">
+            <svg class="flame-icon streak-level-0" id="streakFlame" aria-hidden="true" viewBox="0 0 24 24">
+              <path class="flame-outer" d="M12.1 22c-4.1 0-7.1-2.8-7.1-6.8 0-2.8 1.5-5 3.7-7.3.5 1.7 1.5 2.6 2.5 3.2-.3-3.3 1.1-6.2 4.2-9.1.5 3.4 2 5.1 3.1 6.5 1 1.3 1.8 2.5 1.8 4.8 0 5.1-3.7 8.7-8.2 8.7Z"></path>
+              <path class="flame-inner" d="M12.2 19c-1.8 0-3.1-1.2-3.1-3 0-1.3.7-2.3 1.7-3.4.3.9.8 1.5 1.5 1.9-.1-1.7.6-3.2 2.1-4.7.3 1.8 1.1 2.7 1.6 3.5.5.7.8 1.3.8 2.4 0 2-1.8 3.3-4.6 3.3Z"></path>
+            </svg>
+            <span>Серия</span>
+            <strong id="topStreakScore">0 дней</strong>
+          </div>
+        </div>
+        <div class="weekdays" aria-hidden="true">
+          <span>Пн</span>
+          <span>Вт</span>
+          <span>Ср</span>
+          <span>Чт</span>
+          <span>Пт</span>
+          <span>Сб</span>
+          <span>Вс</span>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+      </section>
+    </main>
+
+    <div class="profile-modal" id="profileModal" aria-hidden="true">
+      <button class="modal-backdrop" id="profileBackdrop" type="button" aria-label="Закрыть окно профиля"></button>
+      <section class="profile-panel" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+        <div class="profile-header">
+          <button class="avatar" id="avatarButton" type="button" aria-label="Выбрать фото профиля" title="Выбрать фото">
+            <img id="profilePhoto" alt="">
+            <span id="avatarFallback">A</span>
+          </button>
+          <input class="visually-hidden" id="photoInput" type="file" accept="image/*">
+          <div>
+            <p class="eyebrow">Профиль</p>
+            <h2 id="profileTitle">Арман</h2>
+            <div class="photo-actions">
+              <button class="text-button" id="changePhotoButton" type="button">Изменить фото</button>
+              <button class="text-button" id="fitPhotoButton" type="button">Подогнать фото</button>
+            </div>
+          </div>
+          <button class="icon-button close-button" id="closeProfile" type="button" aria-label="Закрыть профиль" title="Закрыть">×</button>
+        </div>
+
+        <section class="profile-section" aria-label="Мои результаты">
+          <h3>Мои результаты</h3>
+          <div class="progress-strip">
+            <div class="progress-item">
+              <span>Привычки</span>
+              <strong id="habitScore">0%</strong>
+            </div>
+            <div class="progress-item">
+              <span>Глубокая работа</span>
+              <strong id="workScore">0%</strong>
+            </div>
+            <div class="progress-item">
+              <span>Спорт</span>
+              <strong id="sportScore">0/15</strong>
+            </div>
+            <div class="progress-item">
+              <span>Серия</span>
+              <strong id="streakScore">0 дней</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="profile-section" aria-label="Мои цели">
+          <h3>Мои цели</h3>
+          <div class="goal-band">
+            <div class="goal-item">
+              <span class="goal-kicker">Спорт</span>
+              <strong>3 раза в неделю</strong>
+            </div>
+            <div class="goal-item">
+              <span class="goal-kicker">Английский</span>
+              <strong>15 минут в день</strong>
+            </div>
+            <div class="goal-item">
+              <span class="goal-kicker">Веб-дизайн</span>
+              <strong>1 час в день</strong>
+            </div>
+            <div class="goal-item">
+              <span class="goal-kicker">Продукт</span>
+              <strong>первые клиенты</strong>
+            </div>
+            <div class="goal-item">
+              <span class="goal-kicker">MVP</span>
+              <strong>чат-бот для вуза</strong>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <div class="day-modal" id="dayModal" aria-hidden="true">
+      <button class="modal-backdrop" id="modalBackdrop" type="button" aria-label="Закрыть окно"></button>
+      <section class="day-panel" role="dialog" aria-modal="true" aria-labelledby="selectedDate">
+        <div class="day-header">
+          <div>
+            <p class="eyebrow" id="selectedWeekday">Суббота</p>
+            <h2 id="selectedDate">4 июля</h2>
+          </div>
+          <div class="day-actions">
+            <span class="load-pill not-started" id="loadPill">Не начато</span>
+            <button class="icon-button close-button" id="closeDay" type="button" aria-label="Закрыть день" title="Закрыть">×</button>
+          </div>
+        </div>
+
+        <div class="focus-line">
+          <span>Фокус</span>
+          <strong id="dayFocus">Запуск системы</strong>
+        </div>
+
+        <div class="task-list" id="taskList"></div>
+
+        <div class="notes-area">
+          <label for="energyRange">Энергия: <strong id="energyValue">5</strong>/10</label>
+          <input id="energyRange" type="range" min="1" max="10" value="5">
+          <label for="dayNotes">Заметки</label>
+          <textarea id="dayNotes" rows="5" placeholder="Что получилось, что мешало, что перенести?"></textarea>
+        </div>
+      </section>
+    </div>
+
+    <script src="script.js?v=16"></script>
+  </body>
+</html>
