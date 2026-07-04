@@ -4,6 +4,9 @@ create table if not exists public.progress_sync (
   updated_at timestamptz not null default now()
 );
 
+grant usage on schema public to anon, authenticated;
+grant select, insert, update on public.progress_sync to anon, authenticated;
+
 alter table public.progress_sync enable row level security;
 
 drop policy if exists "progress_sync_select" on public.progress_sync;

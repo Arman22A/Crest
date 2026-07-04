@@ -742,12 +742,17 @@
   }
 
   function cloudHeaders(settings, extra = {}) {
-    return {
+    const headers = {
       apikey: settings.key,
-      Authorization: `Bearer ${settings.key}`,
       "Content-Type": "application/json",
       ...extra
     };
+
+    if (!settings.key.startsWith("sb_publishable_")) {
+      headers.Authorization = `Bearer ${settings.key}`;
+    }
+
+    return headers;
   }
 
   function setSyncBusy(isBusy) {
@@ -762,7 +767,7 @@
   }
 
   function cleanUrl(value) {
-    return value.trim().replace(/\/+$/, "");
+    return value.trim().replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
   }
 
   function dayWord(count) {
