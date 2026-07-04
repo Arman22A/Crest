@@ -41,10 +41,18 @@
   const streakScore = document.querySelector("#streakScore");
   const topStreakScore = document.querySelector("#topStreakScore");
   const streakFlame = document.querySelector("#streakFlame");
+  const syncUrlInput = document.querySelector("#syncUrlInput");
+  const syncKeyInput = document.querySelector("#syncKeyInput");
+  const syncCodeInput = document.querySelector("#syncCodeInput");
+  const saveSyncSettingsButton = document.querySelector("#saveSyncSettings");
+  const pullSyncButton = document.querySelector("#pullSyncButton");
+  const pushSyncButton = document.querySelector("#pushSyncButton");
+  const syncStatus = document.querySelector("#syncStatus");
 
   renderCalendar();
   renderStats();
   renderProfilePhoto();
+  renderSyncSettings();
   normalizeStoredProfilePhoto();
 
   profileButton.addEventListener("click", openProfile);
@@ -56,6 +64,9 @@
   modalBackdrop.addEventListener("click", closeDayModal);
   closeProfile.addEventListener("click", closeProfileModal);
   profileBackdrop.addEventListener("click", closeProfileModal);
+  saveSyncSettingsButton.addEventListener("click", saveSyncSettings);
+  pullSyncButton.addEventListener("click", pullCloudState);
+  pushSyncButton.addEventListener("click", pushCloudState);
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
@@ -296,6 +307,7 @@
   function openProfile() {
     activeModal = "profile";
     renderStats();
+    renderSyncSettings();
     profileModal.classList.add("is-open");
     profileModal.setAttribute("aria-hidden", "false");
     document.body.classList.add("modal-open");
@@ -617,6 +629,140 @@
     streakScore.textContent = streakText;
     topStreakScore.textContent = streakText;
     streakFlame.className.baseVal = `flame-icon ${streakLevelClass(currentStreak)}`;
+  }
+
+  function renderSyncSettings() {
+    syncUrlInput.value = state.syncUrl || "";
+    syncKeyInput.value = state.syncKey || "";
+    syncCodeInput.value = state.syncCode || "";
+  }
+
+  function saveSyncSettings() {
+    state.syncUrl = cleanUrl(syncUrlInput.value);
+    state.syncKey = syncKeyInput.value.trim();
+    state.syncCode = syncCodeInput.value.trim();
+    saveState();
+    setSyncStatus("Настройки сохранены. Теперь можно сохранить прогресс в облако или загрузить его на другом устройстве.", "ok");
+  }
+
+  function getSyncSettings() {
+    const settings = {
+      url: cleanUrl(syncUrlInput.value || state.syncUrl || ""),
+      key: (syncKeyInput.value || state.syncKey || "").trim(),
+      code: (syncCodeInput.value || state.syncCode || "").trim()
+    };
+
+    if (!settings.url || !settings.key || !settings.code) {
+      setSyncStatus("Нужны Supabase URL, anon key и один код синхронизации для ноутбука и телефона.", "error");
+      return null;
+    }
+
+    return settings;
+  }
+
+  async function pushCloudState() {
+    const settings = getSyncSettings();
+    if (!settings) return;
+
+    saveSyncSettings();
+    setSyncBusy(true);
+    setSyncStatus("Сохраняю прогресс в облако...", "busy");
+
+    try {
+      const response = await fetch(`${settings.url}/rest/v1/progress_sync?on_conflict=sync_code`, {
+        method: "POST",
+        headers: cloudHeaders(settings, { Prefer: "resolution=merge-duplicates" }),
+        body: JSON.stringify({
+          sync_code: settings.code,
+          payload: exportProgressState(),
+          updated_at: new Date().toISOString()
+        })
+      });
+
+      if (!response.ok) throw new Error(await response.text());
+      setSyncStatus("Готово. Теперь на телефоне введи эти же настройки и нажми «Загрузить».", "ok");
+    } catch (error) {
+      setSyncStatus("Не получилось сохранить в облако. Проверь таблицу Supabase, URL и anon key.", "error");
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  async function pullCloudState() {
+    const settings = getSyncSettings();
+    if (!settings) return;
+
+    saveSyncSettings();
+    setSyncBusy(true);
+    setSyncStatus("Загружаю прогресс из облака...", "busy");
+
+    try {
+      const response = await fetch(
+        `${settings.url}/rest/v1/progress_sync?sync_code=eq.${encodeURIComponent(settings.code)}&select=payload,updated_at`,
+        { headers: cloudHeaders(settings) }
+      );
+
+      if (!response.ok) throw new Error(await response.text());
+      const rows = await response.json();
+      if (!rows.length || !rows[0].payload) {
+        setSyncStatus("В облаке пока нет прогресса для этого кода. Сначала сохрани его с ноутбука.", "error");
+        return;
+      }
+
+      applyCloudState(rows[0].payload, settings);
+      setSyncStatus("Прогресс загружен. Календарь, профиль и фото обновлены.", "ok");
+    } catch (error) {
+      setSyncStatus("Не получилось загрузить прогресс. Проверь подключение и настройки Supabase.", "error");
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  function exportProgressState() {
+    const copy = JSON.parse(JSON.stringify(state));
+    delete copy.syncUrl;
+    delete copy.syncKey;
+    delete copy.syncCode;
+    return copy;
+  }
+
+  function applyCloudState(payload, settings) {
+    Object.keys(state).forEach((key) => delete state[key]);
+    Object.assign(state, payload, {
+      syncUrl: settings.url,
+      syncKey: settings.key,
+      syncCode: settings.code
+    });
+    saveState();
+    renderCalendar();
+    renderStats();
+    renderProfilePhoto();
+    renderSyncSettings();
+    if (activeModal === "day") renderDay();
+  }
+
+  function cloudHeaders(settings, extra = {}) {
+    return {
+      apikey: settings.key,
+      Authorization: `Bearer ${settings.key}`,
+      "Content-Type": "application/json",
+      ...extra
+    };
+  }
+
+  function setSyncBusy(isBusy) {
+    pullSyncButton.disabled = isBusy;
+    pushSyncButton.disabled = isBusy;
+    saveSyncSettingsButton.disabled = isBusy;
+  }
+
+  function setSyncStatus(message, type) {
+    syncStatus.textContent = message;
+    syncStatus.className = `sync-status ${type || ""}`.trim();
+  }
+
+  function cleanUrl(value) {
+    return value.trim().replace(/\/+$/, "");
   }
 
   function dayWord(count) {

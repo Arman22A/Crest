@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#f7f8f3">
     <title>Месяц прогресса</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml">
-    <link rel="manifest" href="manifest.webmanifest?v=16">
-    <link rel="stylesheet" href="styles.css?v=16">
+    <link rel="manifest" href="manifest.webmanifest?v=17">
+    <link rel="stylesheet" href="styles.css?v=17">
   </head>
   <body>
     <main class="app-shell">
@@ -120,6 +120,33 @@
             </div>
           </div>
         </section>
+
+        <section class="profile-section sync-section" aria-label="Синхронизация">
+          <div class="section-title-row">
+            <h3>Синхронизация</h3>
+            <span class="sync-badge">Cloud</span>
+          </div>
+          <div class="sync-form">
+            <label class="sync-field" for="syncUrlInput">
+              <span>Supabase URL</span>
+              <input id="syncUrlInput" type="url" inputmode="url" autocomplete="off" placeholder="https://project.supabase.co">
+            </label>
+            <label class="sync-field" for="syncKeyInput">
+              <span>Anon key</span>
+              <input id="syncKeyInput" type="password" autocomplete="off" placeholder="eyJ...">
+            </label>
+            <label class="sync-field" for="syncCodeInput">
+              <span>Код синхронизации</span>
+              <input id="syncCodeInput" type="text" autocomplete="off" placeholder="arman-progress-2026">
+            </label>
+          </div>
+          <div class="sync-actions">
+            <button class="secondary-button" id="saveSyncSettings" type="button">Сохранить настройки</button>
+            <button class="secondary-button" id="pullSyncButton" type="button">Загрузить</button>
+            <button class="primary-button" id="pushSyncButton" type="button">Сохранить в облако</button>
+          </div>
+          <p class="sync-status" id="syncStatus">Сначала подключим облако, после этого прогресс будет один на ноутбуке и телефоне.</p>
+        </section>
       </section>
     </div>
 
@@ -153,6 +180,6 @@
       </section>
     </div>
 
-    <script src="script.js?v=16"></script>
+    <script src="script.js?v=17"></script>
   </body>
 </html>
