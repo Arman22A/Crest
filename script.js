@@ -415,6 +415,10 @@
       spacer.className = "day-cell is-empty";
       calendarGrid.appendChild(spacer);
     }
+
+    calendarGrid.classList.remove("calendar-enter");
+    void calendarGrid.offsetWidth;
+    calendarGrid.classList.add("calendar-enter");
   }
 
   function buildVisibleMonth() {
