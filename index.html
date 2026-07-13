@@ -3,14 +3,23 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#f7f8f3">
+    <meta name="theme-color" id="themeColor" content="#f7f8f3">
     <meta name="apple-mobile-web-app-title" content="Crest">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="application-name" content="Crest">
     <title>Crest</title>
-    <link rel="icon" href="icon.ico?v=25" sizes="any">
-    <link rel="apple-touch-icon" href="apple-touch-icon.png?v=25">
-    <link rel="manifest" href="manifest.webmanifest?v=25">
-    <link rel="stylesheet" href="styles.css?v=25">
+    <script>
+      try {
+        const savedTheme = JSON.parse(localStorage.getItem("month-progress-v1") || "{}").theme;
+        document.documentElement.dataset.theme = savedTheme === "knight" ? "knight" : "light";
+      } catch (error) {
+        document.documentElement.dataset.theme = "light";
+      }
+    </script>
+    <link rel="icon" href="icon.ico?v=26" sizes="any">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png?v=26">
+    <link rel="manifest" href="manifest.webmanifest?v=26">
+    <link rel="stylesheet" href="styles.css?v=26">
   </head>
   <body>
     <main class="app-shell">
@@ -80,6 +89,31 @@
           </div>
           <button class="icon-button close-button" id="closeProfile" type="button" aria-label="Закрыть профиль" title="Закрыть">×</button>
         </div>
+
+        <section class="profile-section theme-section" aria-labelledby="themeTitle">
+          <div class="section-title-row">
+            <div>
+              <p class="eyebrow">Внешний вид</p>
+              <h3 id="themeTitle">Тема</h3>
+            </div>
+          </div>
+          <div class="theme-switcher" role="group" aria-label="Тема оформления">
+            <button class="theme-option is-active" type="button" data-theme-choice="light" aria-pressed="true">
+              <span class="theme-swatch light-swatch" aria-hidden="true"></span>
+              <span>
+                <strong>Светлая</strong>
+                <small>Чистая и спокойная</small>
+              </span>
+            </button>
+            <button class="theme-option" type="button" data-theme-choice="knight" aria-pressed="false">
+              <span class="theme-swatch knight-swatch" aria-hidden="true"></span>
+              <span>
+                <strong>Рыцарь</strong>
+                <small>Тёмная сталь и серебро</small>
+              </span>
+            </button>
+          </div>
+        </section>
 
         <section class="profile-section" aria-label="Мои результаты">
           <h3>Мои результаты</h3>
@@ -209,6 +243,6 @@
       </section>
     </div>
 
-    <script src="script.js?v=25"></script>
+    <script src="script.js?v=26"></script>
   </body>
 </html>

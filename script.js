@@ -78,7 +78,10 @@
   const pullSyncButton = document.querySelector("#pullSyncButton");
   const pushSyncButton = document.querySelector("#pushSyncButton");
   const syncStatus = document.querySelector("#syncStatus");
+  const themeColor = document.querySelector("#themeColor");
+  const themeChoices = document.querySelectorAll("[data-theme-choice]");
 
+  applyTheme(state.theme || "light");
   renderCalendar();
   renderStats();
   renderGoals();
@@ -113,6 +116,9 @@
   saveSyncSettingsButton.addEventListener("click", saveSyncSettings);
   pullSyncButton.addEventListener("click", pullCloudState);
   pushSyncButton.addEventListener("click", pushCloudState);
+  themeChoices.forEach((button) => {
+    button.addEventListener("click", () => applyTheme(button.dataset.themeChoice, { save: true }));
+  });
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
@@ -401,6 +407,14 @@
       button.addEventListener("click", () => openDay(day.key));
       calendarGrid.appendChild(button);
     });
+
+    const renderedCells = firstOffset + monthDays.length;
+    const trailingCells = (7 - (renderedCells % 7)) % 7;
+    for (let i = 0; i < trailingCells; i += 1) {
+      const spacer = document.createElement("div");
+      spacer.className = "day-cell is-empty";
+      calendarGrid.appendChild(spacer);
+    }
   }
 
   function buildVisibleMonth() {
@@ -659,6 +673,23 @@
     profileButton.classList.toggle("has-photo", hasPhoto);
     avatarButton.classList.toggle("has-photo", hasPhoto);
     fitPhotoButton.disabled = !hasPhoto;
+  }
+
+  function applyTheme(theme, options = {}) {
+    const selectedTheme = theme === "knight" ? "knight" : "light";
+    document.documentElement.dataset.theme = selectedTheme;
+    themeColor.setAttribute("content", selectedTheme === "knight" ? "#050a12" : "#f7f8f3");
+
+    themeChoices.forEach((button) => {
+      const isSelected = button.dataset.themeChoice === selectedTheme;
+      button.classList.toggle("is-active", isSelected);
+      button.setAttribute("aria-pressed", String(isSelected));
+    });
+
+    if (options.save) {
+      state.theme = selectedTheme;
+      saveState();
+    }
   }
 
   function fitCurrentPhoto() {
@@ -1114,6 +1145,7 @@
     renderGoals();
     renderProfilePhoto();
     renderSyncSettings();
+    applyTheme(state.theme || "light");
     if (activeModal === "day") renderDay();
   }
 

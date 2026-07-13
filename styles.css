@@ -1129,3 +1129,503 @@ textarea:focus,
     grid-template-columns: 1fr;
   }
 }
+
+/* Theme picker */
+.theme-section {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.theme-section .section-title-row {
+  margin-bottom: 2px;
+}
+
+.theme-switcher {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.theme-option {
+  min-width: 0;
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 9px;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.theme-option.is-active {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.theme-option strong,
+.theme-option small {
+  display: block;
+  letter-spacing: 0;
+}
+
+.theme-option strong {
+  font-size: 0.9rem;
+}
+
+.theme-option small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.theme-swatch {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+
+.light-swatch {
+  background: #ffffff;
+  box-shadow: inset 0 -12px 0 #eef1f4;
+}
+
+.knight-swatch {
+  border-color: rgba(220, 235, 248, 0.55);
+  background: #07101b url("knight-background.webp") center top / cover no-repeat;
+  box-shadow: inset 0 0 10px rgba(228, 241, 255, 0.16);
+}
+
+/* Knight theme */
+html[data-theme="knight"] {
+  --bg: #050a12;
+  --ink: #f4f7fb;
+  --muted: #aab8c8;
+  --line: rgba(207, 224, 240, 0.26);
+  --panel: rgba(8, 16, 28, 0.9);
+  --panel-soft: rgba(24, 37, 53, 0.72);
+  --green: #4dc58a;
+  --green-soft: rgba(36, 137, 91, 0.18);
+  --blue: #c8def2;
+  --blue-soft: rgba(191, 218, 242, 0.12);
+  --coral: #ff8179;
+  --coral-soft: rgba(203, 70, 65, 0.17);
+  --gold: #f2ad54;
+  --gold-soft: rgba(224, 143, 45, 0.16);
+  --shadow: 0 18px 55px rgba(0, 0, 0, 0.48);
+  color-scheme: dark;
+  background: #050a12;
+}
+
+html[data-theme="knight"] body {
+  position: relative;
+  color: var(--ink);
+  background: #050a12;
+}
+
+html[data-theme="knight"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: #050a12 url("knight-background.webp") center top / cover no-repeat;
+  pointer-events: none;
+}
+
+html[data-theme="knight"] .app-shell {
+  position: relative;
+  z-index: 1;
+  width: min(1080px, calc(100% - 32px));
+}
+
+html[data-theme="knight"] .topbar {
+  position: relative;
+  min-height: 72px;
+  padding: 8px 10px 16px;
+}
+
+html[data-theme="knight"] .topbar::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: rgba(225, 238, 250, 0.44);
+  box-shadow: 0 0 10px rgba(230, 242, 255, 0.36);
+}
+
+html[data-theme="knight"] h1,
+html[data-theme="knight"] h2,
+html[data-theme="knight"] .day-number {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  letter-spacing: 0;
+}
+
+html[data-theme="knight"] h1 {
+  color: #f8fbff;
+  font-size: 1.9rem;
+  font-weight: 600;
+  text-shadow: 0 0 16px rgba(231, 242, 255, 0.4);
+}
+
+html[data-theme="knight"] h2 {
+  color: #f2f7fc;
+  font-weight: 600;
+}
+
+html[data-theme="knight"] .eyebrow {
+  color: #aebdcd;
+}
+
+html[data-theme="knight"] .calendar-panel,
+html[data-theme="knight"] .day-panel,
+html[data-theme="knight"] .profile-panel,
+html[data-theme="knight"] .task-panel {
+  border: 1px solid rgba(220, 234, 247, 0.38);
+  border-radius: 6px;
+  background: rgba(6, 13, 24, 0.88);
+  box-shadow: var(--shadow), inset 0 0 0 1px rgba(255, 255, 255, 0.035), 0 0 22px rgba(213, 231, 248, 0.06);
+  backdrop-filter: blur(8px);
+}
+
+html[data-theme="knight"] .calendar-panel {
+  position: relative;
+  padding: 22px;
+  overflow: hidden;
+}
+
+html[data-theme="knight"] .calendar-panel::before,
+html[data-theme="knight"] .profile-panel::before,
+html[data-theme="knight"] .day-panel::before,
+html[data-theme="knight"] .task-panel::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(219, 234, 247, 0.09);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+html[data-theme="knight"] .calendar-panel > *,
+html[data-theme="knight"] .profile-panel > *,
+html[data-theme="knight"] .day-panel > *,
+html[data-theme="knight"] .task-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+html[data-theme="knight"] .weekdays {
+  color: #b8c4d0;
+  border-color: rgba(220, 234, 247, 0.34);
+}
+
+html[data-theme="knight"] .day-cell {
+  min-height: 120px;
+  color: #f4f7fa;
+  border-color: rgba(213, 228, 241, 0.25);
+  background: rgba(9, 18, 30, 0.5);
+}
+
+html[data-theme="knight"] .day-cell.is-empty {
+  visibility: visible;
+  color: transparent;
+  pointer-events: none;
+}
+
+html[data-theme="knight"] .day-cell:hover,
+html[data-theme="knight"] .day-cell:focus-visible {
+  background: rgba(184, 211, 235, 0.1);
+  box-shadow: inset 0 0 18px rgba(221, 237, 251, 0.07);
+}
+
+html[data-theme="knight"] .day-number {
+  color: #f5f8fb;
+  font-size: 1.02rem;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px rgba(235, 244, 255, 0.24);
+}
+
+html[data-theme="knight"] .day-cell.is-today .day-number {
+  color: #06101a;
+  background: #edf7ff;
+  box-shadow: 0 0 16px rgba(224, 241, 255, 0.72);
+}
+
+html[data-theme="knight"] .day-cell.is-progress .day-number {
+  color: #ffd598;
+  background: rgba(213, 132, 40, 0.17);
+  border: 1px solid rgba(244, 177, 91, 0.36);
+  box-shadow: 0 0 12px rgba(238, 158, 58, 0.15);
+}
+
+html[data-theme="knight"] .day-cell.is-done .day-number {
+  color: #eafff4;
+  background: rgba(42, 142, 94, 0.62);
+  border: 1px solid rgba(112, 222, 166, 0.48);
+  box-shadow: 0 0 13px rgba(71, 200, 134, 0.24);
+}
+
+html[data-theme="knight"] .icon-button,
+html[data-theme="knight"] .secondary-button,
+html[data-theme="knight"] .danger-button {
+  border-color: rgba(217, 232, 246, 0.35);
+  border-radius: 5px;
+  color: #eef5fb;
+  background: rgba(15, 27, 42, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 0 10px rgba(214, 233, 250, 0.04);
+}
+
+html[data-theme="knight"] .icon-button:hover,
+html[data-theme="knight"] .secondary-button:hover,
+html[data-theme="knight"] .theme-option:hover {
+  border-color: rgba(231, 242, 252, 0.66);
+  background: rgba(36, 53, 70, 0.92);
+  box-shadow: 0 0 13px rgba(218, 236, 252, 0.12);
+}
+
+html[data-theme="knight"] .profile-button,
+html[data-theme="knight"] .avatar,
+html[data-theme="knight"] .check-button,
+html[data-theme="knight"] .remove-button,
+html[data-theme="knight"] .close-button {
+  border-radius: 50%;
+}
+
+html[data-theme="knight"] .month-arrow {
+  border-radius: 4px;
+  font-family: Georgia, serif;
+  color: #f6fbff;
+}
+
+html[data-theme="knight"] .primary-button {
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  border-radius: 5px;
+  color: #08111c;
+  background: #dbe8f3;
+  box-shadow: inset 0 1px 0 #ffffff, 0 0 15px rgba(220, 238, 253, 0.25);
+}
+
+html[data-theme="knight"] .primary-button:hover {
+  background: #f1f8ff;
+  box-shadow: inset 0 1px 0 #ffffff, 0 0 20px rgba(224, 240, 255, 0.4);
+}
+
+html[data-theme="knight"] .profile-button {
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(235, 244, 252, 0.72);
+  background: #0a1421;
+  box-shadow: 0 0 0 3px rgba(130, 151, 171, 0.22), 0 0 17px rgba(231, 243, 255, 0.24);
+}
+
+html[data-theme="knight"] .profile-button::after {
+  inset: 3px;
+  border: 1px solid rgba(232, 243, 252, 0.72);
+  box-shadow: inset 0 0 7px rgba(231, 242, 252, 0.24);
+}
+
+html[data-theme="knight"] .avatar {
+  width: 82px;
+  height: 82px;
+  border: 1px solid rgba(239, 247, 255, 0.85);
+  background: #101e2d;
+  box-shadow: 0 0 0 4px rgba(136, 158, 179, 0.22), 0 0 22px rgba(228, 240, 252, 0.3);
+}
+
+html[data-theme="knight"] .avatar::after {
+  inset: 4px;
+  border: 1px solid rgba(232, 243, 252, 0.76);
+  box-shadow: inset 0 0 10px rgba(223, 238, 252, 0.2);
+}
+
+html[data-theme="knight"] .streak-chip,
+html[data-theme="knight"] .goal-item,
+html[data-theme="knight"] .progress-item,
+html[data-theme="knight"] .task-row,
+html[data-theme="knight"] .theme-section {
+  border-color: rgba(213, 229, 244, 0.25);
+  border-radius: 6px;
+  background: rgba(13, 24, 38, 0.78);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.018);
+}
+
+html[data-theme="knight"] .streak-chip {
+  border-radius: 999px;
+}
+
+html[data-theme="knight"] .theme-section {
+  background: rgba(14, 26, 40, 0.86);
+}
+
+html[data-theme="knight"] .theme-switcher {
+  border-color: rgba(214, 231, 246, 0.24);
+  background: rgba(4, 10, 18, 0.66);
+}
+
+html[data-theme="knight"] .theme-option {
+  border-radius: 4px;
+  color: #eef5fb;
+}
+
+html[data-theme="knight"] .theme-option.is-active {
+  border-color: rgba(230, 241, 251, 0.67);
+  background: rgba(185, 211, 234, 0.14);
+  box-shadow: inset 0 0 18px rgba(224, 239, 252, 0.05), 0 0 12px rgba(222, 238, 252, 0.08);
+}
+
+html[data-theme="knight"] .light-swatch {
+  border-color: rgba(185, 203, 220, 0.6);
+}
+
+html[data-theme="knight"] .knight-swatch {
+  border-color: rgba(235, 244, 252, 0.82);
+  box-shadow: inset 0 0 12px rgba(230, 243, 255, 0.2), 0 0 10px rgba(220, 239, 255, 0.12);
+}
+
+html[data-theme="knight"] .modal-backdrop {
+  background: rgba(0, 4, 10, 0.78);
+  backdrop-filter: blur(3px);
+}
+
+html[data-theme="knight"] .focus-line,
+html[data-theme="knight"] .day-editor {
+  border-color: rgba(199, 219, 237, 0.28);
+  border-left-color: #d8e7f4;
+  border-radius: 5px;
+  background: rgba(24, 38, 54, 0.7);
+  box-shadow: inset 0 0 16px rgba(221, 237, 251, 0.025);
+}
+
+html[data-theme="knight"] .task-row.is-editable {
+  border-color: rgba(219, 235, 249, 0.56);
+  background: rgba(159, 194, 224, 0.08);
+  box-shadow: 0 0 12px rgba(214, 234, 252, 0.07);
+}
+
+html[data-theme="knight"] .add-task-button {
+  border-color: rgba(213, 231, 247, 0.48);
+  border-radius: 5px;
+  color: #dcebf7;
+  background: rgba(145, 180, 210, 0.07);
+}
+
+html[data-theme="knight"] .add-task-button:hover {
+  border-color: rgba(234, 244, 253, 0.78);
+  background: rgba(176, 205, 229, 0.13);
+  box-shadow: 0 0 14px rgba(222, 239, 253, 0.1);
+}
+
+html[data-theme="knight"] input,
+html[data-theme="knight"] textarea,
+html[data-theme="knight"] select,
+html[data-theme="knight"] .task-form input,
+html[data-theme="knight"] .task-form textarea,
+html[data-theme="knight"] .task-form select {
+  border-color: rgba(207, 226, 242, 0.28);
+  border-radius: 5px;
+  color: #f2f6fa;
+  background: rgba(5, 12, 21, 0.76);
+  caret-color: #eff7ff;
+}
+
+html[data-theme="knight"] input::placeholder,
+html[data-theme="knight"] textarea::placeholder {
+  color: #7f8d9c;
+}
+
+html[data-theme="knight"] input:focus,
+html[data-theme="knight"] textarea:focus,
+html[data-theme="knight"] select:focus,
+html[data-theme="knight"] .icon-button:focus-visible,
+html[data-theme="knight"] .check-button:focus-visible {
+  outline: 2px solid rgba(226, 240, 252, 0.58);
+  outline-offset: 2px;
+  border-color: rgba(235, 245, 253, 0.68);
+  box-shadow: 0 0 14px rgba(220, 237, 252, 0.16);
+}
+
+html[data-theme="knight"] .check-button {
+  border-color: rgba(210, 228, 244, 0.4);
+  background: rgba(8, 17, 28, 0.92);
+}
+
+html[data-theme="knight"] .task-row.done .check-button {
+  color: #f4fff9;
+  border-color: rgba(112, 220, 165, 0.72);
+  background: rgba(41, 146, 94, 0.78);
+  box-shadow: 0 0 12px rgba(72, 203, 136, 0.22);
+}
+
+html[data-theme="knight"] .load-pill,
+html[data-theme="knight"] .sync-badge {
+  border: 1px solid rgba(205, 224, 241, 0.22);
+}
+
+html[data-theme="knight"] .load-pill.not-started {
+  color: #b7c4d1;
+  background: rgba(125, 145, 165, 0.12);
+}
+
+html[data-theme="knight"] .text-button,
+html[data-theme="knight"] .task-row.is-editable .task-content-button::after,
+html[data-theme="knight"] .sync-status.busy {
+  color: #d6e8f7;
+}
+
+html[data-theme="knight"] input[type="range"] {
+  accent-color: #dcebf7;
+}
+
+@media (max-width: 760px) {
+  html[data-theme="knight"] .app-shell {
+    width: min(100% - 16px, 980px);
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
+
+  html[data-theme="knight"] .topbar {
+    min-height: 62px;
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+
+  html[data-theme="knight"] h1 {
+    font-size: 1.7rem;
+  }
+
+  html[data-theme="knight"] .calendar-panel {
+    padding: 14px 10px 16px;
+  }
+
+  html[data-theme="knight"] .day-cell {
+    min-height: 76px;
+    padding: 6px 2px;
+  }
+
+  html[data-theme="knight"] .profile-panel,
+  html[data-theme="knight"] .day-panel,
+  html[data-theme="knight"] .task-panel {
+    border-radius: 5px;
+  }
+}
+
+@media (max-width: 420px) {
+  .theme-switcher {
+    grid-template-columns: 1fr;
+  }
+
+  .theme-option {
+    min-height: 58px;
+  }
+}

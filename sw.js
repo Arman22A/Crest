@@ -1,4 +1,4 @@
-const cacheName = "crest-v25";
+const cacheName = "crest-v26";
 const assets = [
   "./",
   "./index.html",
@@ -8,7 +8,8 @@ const assets = [
   "./icon.ico",
   "./icon-192.png",
   "./icon-512.png",
-  "./apple-touch-icon.png"
+  "./apple-touch-icon.png",
+  "./knight-background.webp"
 ];
 
 self.addEventListener("install", (event) => {
