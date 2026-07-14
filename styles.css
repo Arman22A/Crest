@@ -33,6 +33,148 @@ body {
   background: var(--bg);
 }
 
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: max(20px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.auth-screen[hidden] {
+  display: none;
+}
+
+.auth-card {
+  width: min(430px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 24px;
+  background: var(--panel);
+  box-shadow: 0 18px 50px rgba(28, 39, 49, 0.12);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.auth-brand img {
+  width: 54px;
+  height: 54px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.auth-brand h1,
+.auth-brand p {
+  margin: 0;
+}
+
+.auth-brand h1 {
+  font-size: 1.55rem;
+}
+
+.auth-brand p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  min-height: 44px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 4px;
+  background: var(--panel-soft);
+}
+
+.auth-tab {
+  min-width: 0;
+  border: 0;
+  border-radius: 5px;
+  padding: 8px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.auth-tab.is-active {
+  color: var(--ink);
+  background: var(--panel);
+  box-shadow: 0 1px 5px rgba(28, 39, 49, 0.1);
+}
+
+.auth-form {
+  display: grid;
+  gap: 13px;
+}
+
+.auth-form[hidden] {
+  display: none;
+}
+
+.auth-form label,
+.account-fields label {
+  display: grid;
+  gap: 6px;
+}
+
+.auth-form label > span,
+.account-fields label > span,
+.account-email span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.auth-form input,
+.account-fields input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 9px 11px;
+  color: var(--ink);
+  background: var(--panel);
+  font: inherit;
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 3px;
+}
+
+.auth-status {
+  min-height: 20px;
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.auth-status.error {
+  color: #c5221f;
+}
+
+.auth-status.ok {
+  color: var(--green);
+}
+
 body.modal-open {
   overflow: hidden;
 }
@@ -751,8 +893,40 @@ h2 {
   font-weight: 800;
 }
 
-.sync-section {
+.sync-section,
+.account-section {
   padding-top: 2px;
+}
+
+.account-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.9fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.account-email {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  min-height: 44px;
+  align-content: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 11px;
+  background: var(--panel-soft);
+}
+
+.account-email strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}
+
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .sync-form {
@@ -1233,6 +1407,12 @@ textarea:focus,
     grid-template-columns: 1fr;
   }
 
+  .account-fields,
+  .account-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
   .reminder-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1394,6 +1574,33 @@ html[data-theme="knight"] body::before {
   opacity: 0.94;
   pointer-events: none;
   animation: hallBreath 16s ease-in-out infinite alternate;
+}
+
+html[data-theme="knight"] .auth-screen {
+  background: #03070c url("knight-hall-desktop.webp") center / cover no-repeat;
+}
+
+html[data-theme="knight"] .auth-card {
+  border-color: rgba(220, 234, 245, 0.32);
+  background: rgba(3, 10, 16, 0.93);
+  box-shadow: inset 0 0 34px rgba(222, 237, 249, 0.035), 0 24px 70px rgba(0, 0, 0, 0.62);
+}
+
+html[data-theme="knight"] .auth-brand img {
+  border-color: rgba(224, 238, 249, 0.4);
+  box-shadow: 0 0 18px rgba(216, 235, 249, 0.12);
+}
+
+html[data-theme="knight"] .auth-tabs,
+html[data-theme="knight"] .account-email {
+  border-color: rgba(210, 225, 238, 0.22);
+  background: rgba(2, 9, 14, 0.72);
+}
+
+html[data-theme="knight"] .auth-tab.is-active {
+  color: #f0f5f8;
+  background: rgba(185, 212, 232, 0.12);
+  box-shadow: inset 0 0 13px rgba(226, 239, 249, 0.04);
 }
 
 html[data-theme="knight"] .app-shell {
@@ -2426,6 +2633,18 @@ html[data-theme="knight"] * {
 }
 
 @media (max-width: 360px) {
+  .auth-screen {
+    padding-inline: 10px;
+  }
+
+  .auth-card {
+    padding: 18px 14px;
+  }
+
+  .auth-tab {
+    font-size: 0.8rem;
+  }
+
   html[data-theme="knight"] .theme-switcher {
     grid-template-columns: 1fr;
   }

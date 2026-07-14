@@ -1,16 +1,25 @@
 (function () {
   const planStartDate = new Date(2026, 6, 4);
   const planEndDate = new Date(2026, 7, 4);
-  const storageKey = "month-progress-v1";
+  const legacyStorageKey = "month-progress-v1";
+  const activeUserStorageKey = "crest-active-user-v1";
+  const legacyClaimedStorageKey = "crest-legacy-claimed-v1";
+  const bootstrapUserId = localStorage.getItem(activeUserStorageKey);
+  const storageKey = bootstrapUserId ? `crest-user-${bootstrapUserId}` : legacyStorageKey;
+  const supabaseUrl = "https://bclhwefsswxtqtwzppik.supabase.co";
   const cloudFunctionUrl = "https://bclhwefsswxtqtwzppik.supabase.co/functions/v1/crest-api";
   const cloudPublishableKey = "sb_publishable_CDziEC3GM9o0di7zIqw9vw_PgeCT9oJ";
   const vapidPublicKey = "BA1j44cNJV6QoirknYZOiFPQaLiygwxyVmRbaFCcIm3V5lFmTeM-S1SgctoZXNNR5makhB7ip44OcXjDXNMeRQc";
+  const authClient = window.supabase.createClient(supabaseUrl, cloudPublishableKey, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
 
   const weekdayNames = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
   const monthNames = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
   const calendarMonthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 
   const state = loadState();
+  let currentSession = null;
   let now = new Date();
   let today = currentDayDate();
   const plannedDays = buildPlannedDays();
@@ -42,6 +51,7 @@
   const closeProfile = document.querySelector("#closeProfile");
   const profileButton = document.querySelector("#profileButton");
   const profileButtonPhoto = document.querySelector("#profileButtonPhoto");
+  const profileTitle = document.querySelector("#profileTitle");
   const avatarButton = document.querySelector("#avatarButton");
   const changePhotoButton = document.querySelector("#changePhotoButton");
   const fitPhotoButton = document.querySelector("#fitPhotoButton");
@@ -79,10 +89,11 @@
   const newGoalKicker = document.querySelector("#newGoalKicker");
   const newGoalTitle = document.querySelector("#newGoalTitle");
   const addGoalButton = document.querySelector("#addGoalButton");
-  const syncCodeInput = document.querySelector("#syncCodeInput");
-  const saveSyncSettingsButton = document.querySelector("#saveSyncSettings");
-  const pullSyncButton = document.querySelector("#pullSyncButton");
-  const pushSyncButton = document.querySelector("#pushSyncButton");
+  const profileNameInput = document.querySelector("#profileNameInput");
+  const saveProfileNameButton = document.querySelector("#saveProfileName");
+  const syncNowButton = document.querySelector("#syncNowButton");
+  const logoutButton = document.querySelector("#logoutButton");
+  const accountEmail = document.querySelector("#accountEmail");
   const syncStatus = document.querySelector("#syncStatus");
   const reminderToggle = document.querySelector("#reminderToggle");
   const morningTimeInput = document.querySelector("#morningTimeInput");
@@ -93,19 +104,30 @@
   const reminderStatus = document.querySelector("#reminderStatus");
   const themeColor = document.querySelector("#themeColor");
   const themeChoices = document.querySelectorAll("[data-theme-choice]");
+  const authScreen = document.querySelector("#authScreen");
+  const loginTab = document.querySelector("#loginTab");
+  const registerTab = document.querySelector("#registerTab");
+  const loginForm = document.querySelector("#loginForm");
+  const registerForm = document.querySelector("#registerForm");
+  const loginEmail = document.querySelector("#loginEmail");
+  const loginPassword = document.querySelector("#loginPassword");
+  const registerName = document.querySelector("#registerName");
+  const registerEmail = document.querySelector("#registerEmail");
+  const registerPassword = document.querySelector("#registerPassword");
+  const registerPasswordConfirm = document.querySelector("#registerPasswordConfirm");
+  const authStatus = document.querySelector("#authStatus");
 
   applyTheme(state.theme || "light");
   renderCalendar();
   renderStats();
   renderGoals();
   renderProfilePhoto();
-  renderSyncSettings();
+  renderAccount();
   renderReminderSettings();
   normalizeStoredProfilePhoto();
-  startAutoSync();
   startDateWatcher();
-  refreshNotificationSubscription();
   openRequestedDay();
+  initializeAuth();
   if ("clearAppBadge" in navigator) navigator.clearAppBadge().catch(() => {});
 
   profileButton.addEventListener("click", openProfile);
@@ -131,9 +153,13 @@
   saveTaskButton.addEventListener("click", saveTaskFromEditor);
   deleteTaskButton.addEventListener("click", deleteTaskFromEditor);
   addGoalButton.addEventListener("click", addGoal);
-  saveSyncSettingsButton.addEventListener("click", saveSyncSettings);
-  pullSyncButton.addEventListener("click", pullCloudState);
-  pushSyncButton.addEventListener("click", pushCloudState);
+  saveProfileNameButton.addEventListener("click", saveProfileName);
+  syncNowButton.addEventListener("click", () => pullCloudState({ pushIfEmpty: true }));
+  logoutButton.addEventListener("click", logoutAccount);
+  loginTab.addEventListener("click", () => showAuthMode("login"));
+  registerTab.addEventListener("click", () => showAuthMode("register"));
+  loginForm.addEventListener("submit", loginAccount);
+  registerForm.addEventListener("submit", registerAccount);
   reminderToggle.addEventListener("change", handleReminderToggle);
   morningTimeInput.addEventListener("change", saveReminderSettings);
   eveningTimeInput.addEventListener("change", saveReminderSettings);
@@ -175,6 +201,222 @@
     if (document.visibilityState === "visible") handleAppResume();
   });
 
+  async function initializeAuth() {
+    const { data, error } = await authClient.auth.getSession();
+    if (error) {
+      showSignedOut("Не удалось проверить аккаунт. Проверь интернет и попробуй снова.", "error");
+    } else if (data.session) {
+      activateSession(data.session);
+    } else {
+      showSignedOut("Войди или создай аккаунт, чтобы открыть свой календарь.");
+    }
+
+    authClient.auth.onAuthStateChange((event, session) => {
+      currentSession = session;
+      if (event === "SIGNED_OUT") {
+        showSignedOut("Ты вышел из аккаунта.");
+        return;
+      }
+      if (!session) return;
+      if (event === "TOKEN_REFRESHED") {
+        renderAccount();
+        return;
+      }
+      setTimeout(() => activateSession(session), 0);
+    });
+  }
+
+  function activateSession(session) {
+    currentSession = session;
+    const userId = session.user.id;
+    if (bootstrapUserId !== userId) {
+      prepareAccountStorage(session.user);
+      localStorage.setItem(activeUserStorageKey, userId);
+      window.location.reload();
+      return;
+    }
+
+    if (!state.profileName) {
+      state.profileName = accountDisplayName(session.user);
+      state.profileUpdatedAt = new Date().toISOString();
+      saveState({ skipCloud: true });
+    }
+
+    authScreen.hidden = true;
+    document.body.classList.add("is-authenticated");
+    renderProfilePhoto();
+    renderAccount();
+    startAutoSync();
+    pullCloudState({ auto: true, pushIfEmpty: true }).then(() => refreshNotificationSubscription());
+  }
+
+  function prepareAccountStorage(user) {
+    const userKey = `crest-user-${user.id}`;
+    if (localStorage.getItem(userKey)) return;
+
+    let nextState = {};
+    const legacy = readStoredState(legacyStorageKey);
+    const legacyOwner = localStorage.getItem(legacyClaimedStorageKey);
+    const canClaimLegacy = Boolean(legacy.syncCode) && !legacyOwner;
+    if (canClaimLegacy) {
+      nextState = legacy;
+      localStorage.setItem(legacyClaimedStorageKey, user.id);
+    } else {
+      nextState.goals = [];
+      nextState.goalsUpdatedAt = new Date().toISOString();
+    }
+
+    nextState.profileName = accountDisplayName(user);
+    nextState.profileUpdatedAt = new Date().toISOString();
+    nextState.useStarterTemplate = canClaimLegacy;
+    nextState.cloudRevision = canClaimLegacy ? Number(nextState.cloudRevision) || 0 : 0;
+    localStorage.setItem(userKey, JSON.stringify(nextState));
+  }
+
+  function accountDisplayName(user) {
+    const metadataName = String(user?.user_metadata?.display_name || "").trim();
+    if (metadataName) return metadataName.slice(0, 40);
+    const emailName = String(user?.email || "").split("@")[0].trim();
+    return (emailName || "Пользователь").slice(0, 40);
+  }
+
+  function showSignedOut(message, type) {
+    currentSession = null;
+    authScreen.hidden = false;
+    document.body.classList.remove("is-authenticated");
+    if (cloudPullTimer) clearInterval(cloudPullTimer);
+    cloudPullTimer = null;
+    renderAccount();
+    setAuthStatus(message, type);
+  }
+
+  function showAuthMode(mode) {
+    const register = mode === "register";
+    loginForm.hidden = register;
+    registerForm.hidden = !register;
+    loginTab.classList.toggle("is-active", !register);
+    registerTab.classList.toggle("is-active", register);
+    loginTab.setAttribute("aria-selected", String(!register));
+    registerTab.setAttribute("aria-selected", String(register));
+    setAuthStatus(register ? "Создай личный аккаунт Crest." : "Войди, чтобы продолжить с любого устройства.");
+    (register ? registerName : loginEmail).focus();
+  }
+
+  async function loginAccount(event) {
+    event.preventDefault();
+    setAuthBusy(true);
+    setAuthStatus("Входим в аккаунт...");
+    const { data, error } = await authClient.auth.signInWithPassword({
+      email: loginEmail.value.trim(),
+      password: loginPassword.value
+    });
+    setAuthBusy(false);
+    if (error || !data.session) {
+      setAuthStatus(authErrorMessage(error), "error");
+      return;
+    }
+    setAuthStatus("Аккаунт открыт. Загружаем календарь...", "ok");
+    activateSession(data.session);
+  }
+
+  async function registerAccount(event) {
+    event.preventDefault();
+    const name = registerName.value.trim();
+    if (name.length < 2) {
+      setAuthStatus("Имя должно содержать хотя бы 2 символа.", "error");
+      return;
+    }
+    if (registerPassword.value !== registerPasswordConfirm.value) {
+      setAuthStatus("Пароли не совпадают.", "error");
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthStatus("Создаём личный аккаунт...");
+    const { data, error } = await authClient.auth.signUp({
+      email: registerEmail.value.trim(),
+      password: registerPassword.value,
+      options: {
+        data: { display_name: name },
+        emailRedirectTo: "https://arman22a.github.io/Crest/"
+      }
+    });
+    setAuthBusy(false);
+    if (error) {
+      setAuthStatus(authErrorMessage(error), "error");
+      return;
+    }
+    if (!data.session) {
+      showAuthMode("login");
+      loginEmail.value = registerEmail.value.trim();
+      setAuthStatus("Аккаунт создан. Открой письмо от Crest и подтверди email, затем войди.", "ok");
+      return;
+    }
+    setAuthStatus("Аккаунт создан. Переносим твой календарь...", "ok");
+    activateSession(data.session);
+  }
+
+  async function logoutAccount() {
+    logoutButton.disabled = true;
+    setSyncStatus("Выходим из аккаунта...", "busy");
+    try {
+      if (state.notificationEndpoint && currentSession) {
+        await cloudRequest("unsubscribe", getSyncSettings({ silent: true }), { endpoint: state.notificationEndpoint });
+      }
+      if ("serviceWorker" in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) await subscription.unsubscribe();
+      }
+      await authClient.auth.signOut({ scope: "local" });
+    } finally {
+      localStorage.removeItem(activeUserStorageKey);
+      window.location.reload();
+    }
+  }
+
+  async function saveProfileName() {
+    const name = profileNameInput.value.trim();
+    if (name.length < 2) {
+      setSyncStatus("Имя должно содержать хотя бы 2 символа.", "error");
+      return;
+    }
+    saveProfileNameButton.disabled = true;
+    const { error } = await authClient.auth.updateUser({ data: { display_name: name } });
+    saveProfileNameButton.disabled = false;
+    if (error) {
+      setSyncStatus("Не удалось сохранить имя. Проверь интернет.", "error");
+      return;
+    }
+    state.profileName = name.slice(0, 40);
+    state.profileUpdatedAt = new Date().toISOString();
+    saveState();
+    renderProfilePhoto();
+    setSyncStatus("Имя сохранено и будет видно на всех устройствах.", "ok");
+  }
+
+  function setAuthBusy(busy) {
+    authScreen.querySelectorAll("input, button").forEach((element) => {
+      element.disabled = busy;
+    });
+  }
+
+  function setAuthStatus(message, type) {
+    authStatus.textContent = message;
+    authStatus.className = `auth-status ${type || ""}`.trim();
+  }
+
+  function authErrorMessage(error) {
+    const message = String(error?.message || "").toLowerCase();
+    if (message.includes("rate limit")) return "Слишком много писем отправлено за короткое время. Подожди около часа и попробуй снова.";
+    if (message.includes("invalid login credentials")) return "Неверный email или пароль.";
+    if (message.includes("email not confirmed")) return "Сначала подтверди email по ссылке из письма.";
+    if (message.includes("already registered") || message.includes("already been registered")) return "Этот email уже зарегистрирован. Перейди во вкладку «Войти».";
+    if (message.includes("password")) return "Пароль должен содержать не менее 8 символов.";
+    if (message.includes("email")) return "Проверь правильность email.";
+    return "Не удалось выполнить действие. Проверь интернет и попробуй снова.";
+  }
+
   function buildPlannedDays() {
     const result = [];
     const current = new Date(planStartDate);
@@ -187,6 +429,14 @@
 
   function buildDay(date) {
     const key = formatKey(date);
+    if (state.useStarterTemplate === false) {
+      return {
+        key,
+        date: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
+        focus: "Без фокуса",
+        tasks: []
+      };
+    }
     const day = date.getDay();
     const weekIndex = Math.floor((date - planStartDate) / 604800000);
     const isSportDay = [1, 3, 6].includes(day);
@@ -413,7 +663,9 @@
 
   function migrateState() {
     const fallbackUpdatedAt = state.localUpdatedAt || new Date().toISOString();
-    state.schemaVersion = 28;
+    state.schemaVersion = 29;
+    state.profileName = String(state.profileName || "").trim().slice(0, 40);
+    if (typeof state.useStarterTemplate !== "boolean") state.useStarterTemplate = true;
     state.lockedDays = state.lockedDays && typeof state.lockedDays === "object" ? state.lockedDays : {};
     state.dayPlans = state.dayPlans && typeof state.dayPlans === "object" ? state.dayPlans : {};
     state.reminderMorning = validTime(state.reminderMorning) ? state.reminderMorning : "10:00";
@@ -545,7 +797,7 @@
 
   function goals() {
     if (!Array.isArray(state.goals)) {
-      state.goals = defaultGoals();
+      state.goals = state.useStarterTemplate === false ? [] : defaultGoals();
     }
     return state.goals;
   }
@@ -650,7 +902,8 @@
     activeModal = "profile";
     renderStats();
     renderGoals();
-    renderSyncSettings();
+    renderProfilePhoto();
+    renderAccount();
     profileModal.classList.add("is-open");
     profileModal.setAttribute("aria-hidden", "false");
     document.body.classList.add("modal-open");
@@ -840,6 +1093,10 @@
   function renderProfilePhoto() {
     const photo = state.profilePhoto;
     const hasPhoto = Boolean(photo);
+    const name = state.profileName || (currentSession ? accountDisplayName(currentSession.user) : "Пользователь");
+    profileTitle.textContent = name;
+    profileNameInput.value = name;
+    avatarFallback.textContent = name.trim().charAt(0).toUpperCase() || "C";
     profilePhoto.src = hasPhoto ? photo : "";
     profilePhoto.hidden = !hasPhoto;
     profileButtonPhoto.src = hasPhoto ? photo : "";
@@ -1197,46 +1454,30 @@
     renderGoals();
   }
 
-  function renderSyncSettings() {
-    syncCodeInput.value = state.syncCode || "";
-  }
-
-  function saveSyncSettings() {
-    storeSyncSettings();
-    if (!getSyncSettings()) return;
-    setSyncStatus("Подключаю защищённую автосинхронизацию...", "busy");
-    pullCloudState({ pushIfEmpty: true });
-  }
-
-  function storeSyncSettings() {
-    state.syncCode = syncCodeInput.value.trim();
-    saveState({ skipCloud: true });
-    startAutoSync();
+  function renderAccount() {
+    const user = currentSession?.user;
+    accountEmail.textContent = user?.email || "-";
+    profileNameInput.value = state.profileName || (user ? accountDisplayName(user) : "");
+    syncNowButton.disabled = !user || isCloudBusy;
+    logoutButton.disabled = !user;
+    saveProfileNameButton.disabled = !user;
+    if (user && !isCloudBusy) setSyncStatus("Аккаунт подключён. Изменения синхронизируются автоматически.", "ok");
   }
 
   function getSyncSettings(options = {}) {
-    const settings = {
-      code: (syncCodeInput.value || state.syncCode || "").trim()
-    };
-
-    if (!settings.code) {
+    if (!currentSession?.access_token) {
       if (!options.silent) {
-        setSyncStatus("Введи один облачный пароль для телефона и ноутбука.", "error");
+        setSyncStatus("Сначала войди в аккаунт Crest.", "error");
       }
       return null;
     }
-
-    return settings;
+    return { userId: currentSession.user.id, accessToken: currentSession.access_token };
   }
 
   async function pushCloudState(options = {}) {
     if (isCloudBusy && options.auto) return;
     const settings = getSyncSettings({ silent: options.auto });
     if (!settings) return;
-
-    if (!options.auto) {
-      storeSyncSettings();
-    }
 
     isCloudBusy = true;
     setSyncBusy(true);
@@ -1247,18 +1488,22 @@
       const result = await cloudRequest("push", settings, {
         payload: exportProgressState(),
         baseRevision: state.cloudRevision || 0,
-        reminderDays: buildReminderDays()
+        reminderDays: buildReminderDays(),
+        legacyCode: state.syncCode || undefined
       });
-      applyCloudState(result.payload, settings, result.updatedAt, result.revision);
+      applyCloudState(result.payload, result.updatedAt, result.revision);
+      clearLegacyCloudPassword();
       if (!options.auto) {
-        setSyncStatus("Готово. Телефон и ноутбук подключены к защищённому облаку.", "ok");
+        setSyncStatus("Готово. Аккаунт синхронизирован.", "ok");
       } else {
         setSyncStatus("Сохранено в облако.", "ok");
       }
+      return true;
     } catch (error) {
       if (!options.auto) {
-        setSyncStatus("Не получилось сохранить в облако. Проверь интернет и облачный пароль.", "error");
+        setSyncStatus("Не получилось сохранить изменения. Проверь интернет.", "error");
       }
+      return false;
     } finally {
       isCloudBusy = false;
       setSyncBusy(false);
@@ -1271,32 +1516,29 @@
     const settings = getSyncSettings({ silent: options.auto });
     if (!settings) return;
 
-    if (!options.auto) {
-      storeSyncSettings();
-    }
-
     isCloudBusy = true;
     setSyncBusy(true);
     if (!options.auto) setSyncStatus("Загружаю прогресс из облака...", "busy");
 
     try {
       const result = await cloudRequest("pull", settings);
-      if (!state.cloudRevision || result.revision > state.cloudRevision) {
-        applyCloudState(result.payload, settings, result.updatedAt, result.revision);
+      if (!result.exists && options.pushIfEmpty) {
+        isCloudBusy = false;
+        setSyncBusy(false);
+        return await pushCloudState({ auto: true });
+      }
+      if (result.exists && (!state.cloudRevision || result.revision > state.cloudRevision)) {
+        applyCloudState(result.payload, result.updatedAt, result.revision);
         setSyncStatus(options.auto ? "Подтянул свежие изменения из облака." : "Прогресс загружен. Календарь, профиль и фото обновлены.", "ok");
       } else if (!options.auto) {
         setSyncStatus("У тебя уже свежая версия прогресса.", "ok");
       }
+      return true;
     } catch (error) {
-      if (error.code === "NOT_FOUND" && options.pushIfEmpty) {
-        isCloudBusy = false;
-        setSyncBusy(false);
-        pushCloudState({ auto: true });
-        return;
-      }
       if (!options.auto) {
-        setSyncStatus("Не получилось загрузить прогресс. Проверь интернет и облачный пароль.", "error");
+        setSyncStatus("Не получилось загрузить прогресс. Проверь интернет и повтори.", "error");
       }
+      return false;
     } finally {
       isCloudBusy = false;
       setSyncBusy(false);
@@ -1313,7 +1555,7 @@
     return copy;
   }
 
-  function applyCloudState(payload, settings, cloudUpdatedAt, cloudRevision) {
+  function applyCloudState(payload, cloudUpdatedAt, cloudRevision) {
     const localDevice = {
       remindersEnabled: state.remindersEnabled,
       notificationEndpoint: state.notificationEndpoint
@@ -1321,7 +1563,6 @@
     isApplyingCloud = true;
     Object.keys(state).forEach((key) => delete state[key]);
     Object.assign(state, payload, {
-      syncCode: settings.code,
       cloudUpdatedAt,
       cloudRevision,
       remindersEnabled: localDevice.remindersEnabled,
@@ -1336,7 +1577,7 @@
     renderStats();
     renderGoals();
     renderProfilePhoto();
-    renderSyncSettings();
+    renderAccount();
     renderReminderSettings();
     applyTheme(state.theme || "light");
     if (activeModal === "day") renderDay();
@@ -1364,13 +1605,22 @@
   }
 
   async function cloudRequest(action, settings, data = {}) {
+    const { data: sessionData, error: sessionError } = await authClient.auth.getSession();
+    const session = sessionData?.session;
+    if (sessionError || !session) {
+      const authError = new Error("Authentication required");
+      authError.code = "AUTH_REQUIRED";
+      throw authError;
+    }
+    currentSession = session;
     const response = await fetch(cloudFunctionUrl, {
       method: "POST",
       headers: {
         apikey: cloudPublishableKey,
+        Authorization: `Bearer ${session.access_token}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ action, code: settings.code, ...data })
+      body: JSON.stringify({ action, ...data })
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -1382,14 +1632,24 @@
   }
 
   function setSyncBusy(isBusy) {
-    pullSyncButton.disabled = isBusy;
-    pushSyncButton.disabled = isBusy;
-    saveSyncSettingsButton.disabled = isBusy;
+    syncNowButton.disabled = isBusy || !currentSession;
+    saveProfileNameButton.disabled = isBusy || !currentSession;
   }
 
   function setSyncStatus(message, type) {
     syncStatus.textContent = message;
     syncStatus.className = `sync-status ${type || ""}`.trim();
+  }
+
+  function clearLegacyCloudPassword() {
+    if (!state.syncCode) return;
+    delete state.syncCode;
+    saveState({ skipCloud: true });
+    const legacy = readStoredState(legacyStorageKey);
+    if (legacy.syncCode) {
+      delete legacy.syncCode;
+      localStorage.setItem(legacyStorageKey, JSON.stringify(legacy));
+    }
   }
 
   function buildReminderDays() {
@@ -1437,8 +1697,7 @@
     const settings = getSyncSettings({ silent: true });
     if (!settings) {
       reminderToggle.checked = false;
-      setReminderStatus("Сначала подключи облако одним паролем.", "error");
-      syncCodeInput.focus();
+      setReminderStatus("Сначала войди в аккаунт Crest.", "error");
       return;
     }
     if (!pushSupported()) {
@@ -1643,8 +1902,12 @@
   }
 
   function loadState() {
+    return readStoredState(storageKey);
+  }
+
+  function readStoredState(key) {
     try {
-      return JSON.parse(localStorage.getItem(storageKey)) || {};
+      return JSON.parse(localStorage.getItem(key)) || {};
     } catch (error) {
       return {};
     }
@@ -1680,7 +1943,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=28").then((registration) => registration.update()).catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=29").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();

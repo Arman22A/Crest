@@ -23,32 +23,39 @@ Deno.serve(async (request) => {
       return json(await dispatchReminders(), 200, corsHeaders);
     }
 
-    const code = String(body.code || "").trim();
-    if (code.length < 8) return json({ error: "Cloud password is too short", code: "INVALID_CODE" }, 400, corsHeaders);
-    const syncId = await sha256(code);
-
-    if (action === "pull") return await pullProgress(syncId, corsHeaders);
-    if (action === "push") return await pushProgress(syncId, body, corsHeaders);
-    if (action === "subscribe") return await subscribe(syncId, body, corsHeaders);
-    if (action === "unsubscribe") return await unsubscribe(syncId, body, corsHeaders);
-    if (action === "test_notification") return await testNotification(syncId, body, corsHeaders);
+    const user = await authenticatedUser(request);
+    if (action === "pull") return await pullProgress(user.id, corsHeaders);
+    if (action === "push") return await pushProgress(user.id, body, corsHeaders);
+    if (action === "subscribe") return await subscribe(user.id, body, corsHeaders);
+    if (action === "unsubscribe") return await unsubscribe(user.id, body, corsHeaders);
+    if (action === "test_notification") return await testNotification(user.id, body, corsHeaders);
     return json({ error: "Unknown action", code: "UNKNOWN_ACTION" }, 400, corsHeaders);
   } catch (error) {
+    if (error instanceof AuthError) {
+      return json({ error: error.message, code: "AUTH_REQUIRED" }, 401, corsHeaders);
+    }
     console.error(error);
     return json({ error: "Crest cloud request failed", code: "SERVER_ERROR" }, 500, corsHeaders);
   }
 });
 
-async function pullProgress(syncId: string, headers: HeadersInit) {
-  const row = await progressRow(syncId);
-  if (!row) return json({ error: "Progress not found", code: "NOT_FOUND" }, 404, headers);
-  return json({ payload: row.payload, revision: row.revision, updatedAt: row.updated_at }, 200, headers);
+async function pullProgress(userId: string, headers: HeadersInit) {
+  const row = await progressRow(userId);
+  if (!row) return json({ exists: false, payload: {}, revision: 0, updatedAt: null }, 200, headers);
+  return json({ exists: true, payload: row.payload, revision: row.revision, updatedAt: row.updated_at }, 200, headers);
 }
 
-async function pushProgress(syncId: string, body: Record<string, unknown>, headers: HeadersInit) {
+async function pushProgress(userId: string, body: Record<string, unknown>, headers: HeadersInit) {
+  const syncId = userSyncId(userId);
   const incoming = isObject(body.payload) ? body.payload : {};
   const baseRevision = Number(body.baseRevision) || 0;
-  const current = await progressRow(syncId);
+  let current = await progressRow(userId);
+  let legacySyncId = "";
+  const legacyCode = String(body.legacyCode || "").trim();
+  if (!current && legacyCode.length >= 8) {
+    legacySyncId = await sha256(legacyCode);
+    current = await legacyProgressRow(legacySyncId);
+  }
   const payload = current
     ? mergeProgress(current.payload || {}, incoming, baseRevision === Number(current.revision))
     : incoming;
@@ -56,14 +63,15 @@ async function pushProgress(syncId: string, body: Record<string, unknown>, heade
   const updatedAt = new Date().toISOString();
 
   let error;
-  if (current) {
+  if (current && !legacySyncId) {
     ({ error } = await supabase
       .from("progress_sync")
       .update({ payload, revision, updated_at: updatedAt })
-      .eq("sync_id", syncId));
+      .eq("user_id", userId));
   } else {
     ({ error } = await supabase.from("progress_sync").insert({
       sync_id: syncId,
+      user_id: userId,
       payload,
       revision,
       updated_at: updatedAt
@@ -75,21 +83,37 @@ async function pushProgress(syncId: string, body: Record<string, unknown>, heade
     const { error: reminderError } = await supabase
       .from("push_subscriptions")
       .update({ reminder_days: body.reminderDays, updated_at: updatedAt })
-      .eq("sync_id", syncId);
+      .eq("user_id", userId);
     if (reminderError) throw reminderError;
   }
 
-  return json({ payload, revision, updatedAt }, 200, headers);
+  if (legacySyncId) {
+    const { error: subscriptionMigrationError } = await supabase
+      .from("push_subscriptions")
+      .update({ sync_id: syncId, user_id: userId, updated_at: updatedAt })
+      .eq("sync_id", legacySyncId);
+    if (subscriptionMigrationError) throw subscriptionMigrationError;
+    const { error: legacyDeleteError } = await supabase
+      .from("progress_sync")
+      .delete()
+      .eq("sync_id", legacySyncId)
+      .is("user_id", null);
+    if (legacyDeleteError) throw legacyDeleteError;
+  }
+
+  return json({ exists: true, payload, revision, updatedAt }, 200, headers);
 }
 
-async function subscribe(syncId: string, body: Record<string, unknown>, headers: HeadersInit) {
-  if (!await progressRow(syncId)) return json({ error: "Connect cloud first", code: "NOT_FOUND" }, 404, headers);
+async function subscribe(userId: string, body: Record<string, unknown>, headers: HeadersInit) {
+  if (!await progressRow(userId)) return json({ error: "Sync account first", code: "NOT_FOUND" }, 404, headers);
+  const syncId = userSyncId(userId);
   const subscription = isObject(body.subscription) ? body.subscription : null;
   const endpoint = subscription && typeof subscription.endpoint === "string" ? subscription.endpoint : "";
   if (!endpoint) return json({ error: "Invalid subscription", code: "INVALID_SUBSCRIPTION" }, 400, headers);
 
   const row = {
     sync_id: syncId,
+    user_id: userId,
     endpoint,
     subscription,
     device_name: safeText(body.deviceName, "Crest", 40),
@@ -105,22 +129,22 @@ async function subscribe(syncId: string, body: Record<string, unknown>, headers:
   return json({ ok: true }, 200, headers);
 }
 
-async function unsubscribe(syncId: string, body: Record<string, unknown>, headers: HeadersInit) {
+async function unsubscribe(userId: string, body: Record<string, unknown>, headers: HeadersInit) {
   const endpoint = String(body.endpoint || "");
   if (endpoint) {
     const { error } = await supabase
       .from("push_subscriptions")
       .delete()
-      .eq("sync_id", syncId)
+      .eq("user_id", userId)
       .eq("endpoint", endpoint);
     if (error) throw error;
   }
   return json({ ok: true }, 200, headers);
 }
 
-async function testNotification(syncId: string, body: Record<string, unknown>, headers: HeadersInit) {
+async function testNotification(userId: string, body: Record<string, unknown>, headers: HeadersInit) {
   const endpoint = String(body.endpoint || "");
-  const query = supabase.from("push_subscriptions").select("*").eq("sync_id", syncId).eq("enabled", true);
+  const query = supabase.from("push_subscriptions").select("*").eq("user_id", userId).eq("enabled", true);
   const { data, error } = endpoint ? await query.eq("endpoint", endpoint).maybeSingle() : await query.limit(1).maybeSingle();
   if (error) throw error;
   if (!data) return json({ error: "Subscription not found", code: "NOT_FOUND" }, 404, headers);
@@ -209,15 +233,41 @@ async function serverSecrets(names: string[]) {
   return result;
 }
 
-async function progressRow(syncId: string) {
+async function progressRow(userId: string) {
   const { data, error } = await supabase
     .from("progress_sync")
     .select("payload,revision,updated_at")
-    .eq("sync_id", syncId)
+    .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;
   return data;
 }
+
+async function legacyProgressRow(syncId: string) {
+  const { data, error } = await supabase
+    .from("progress_sync")
+    .select("payload,revision,updated_at")
+    .eq("sync_id", syncId)
+    .is("user_id", null)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function authenticatedUser(request: Request) {
+  const authorization = request.headers.get("authorization") || "";
+  const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+  if (!token) throw new AuthError("Sign in required");
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) throw new AuthError("Session is invalid or expired");
+  return data.user;
+}
+
+function userSyncId(userId: string) {
+  return `user:${userId}`;
+}
+
+class AuthError extends Error {}
 
 function mergeProgress(server: Record<string, unknown>, incoming: Record<string, unknown>, revisionsMatch: boolean) {
   const merged: Record<string, unknown> = revisionsMatch ? { ...incoming } : { ...server, ...incoming };
@@ -242,6 +292,7 @@ function mergeProgress(server: Record<string, unknown>, incoming: Record<string,
   }
 
   chooseSection(merged, server, incoming, "goals", "goalsUpdatedAt", revisionsMatch);
+  chooseSection(merged, server, incoming, "profileName", "profileUpdatedAt", revisionsMatch);
   chooseSection(merged, server, incoming, "profilePhoto", "profileUpdatedAt", revisionsMatch);
   chooseSection(merged, server, incoming, "profilePhotoVersion", "profileUpdatedAt", revisionsMatch);
   chooseSection(merged, server, incoming, "theme", "themeUpdatedAt", revisionsMatch);
@@ -348,7 +399,7 @@ function cors(request: Request) {
   const allowed = origin === "https://arman22a.github.io" || /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin);
   return {
     "Access-Control-Allow-Origin": allowed ? origin : "https://arman22a.github.io",
-    "Access-Control-Allow-Headers": "apikey, content-type, x-cron-secret",
+    "Access-Control-Allow-Headers": "apikey, authorization, content-type, x-cron-secret",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin"
   };

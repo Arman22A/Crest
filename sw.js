@@ -1,15 +1,16 @@
-const cacheName = "crest-v28";
+const cacheName = "crest-v29";
 const vapidPublicKey = "BA1j44cNJV6QoirknYZOiFPQaLiygwxyVmRbaFCcIm3V5lFmTeM-S1SgctoZXNNR5makhB7ip44OcXjDXNMeRQc";
 const assets = [
   "./",
   "./index.html",
-  "./styles.css?v=28",
-  "./script.js?v=28",
-  "./manifest.webmanifest?v=28",
-  "./icon.ico?v=28",
+  "./styles.css?v=29",
+  "./vendor/supabase-2.110.3.js?v=29",
+  "./script.js?v=29",
+  "./manifest.webmanifest?v=29",
+  "./icon.ico?v=29",
   "./icon-192.png",
   "./icon-512.png",
-  "./apple-touch-icon.png?v=28",
+  "./apple-touch-icon.png?v=29",
   "./knight-hall-desktop.webp",
   "./knight-hall-mobile.webp"
 ];
