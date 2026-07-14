@@ -16,10 +16,10 @@
         document.documentElement.dataset.theme = "light";
       }
     </script>
-    <link rel="icon" href="icon.ico?v=27" sizes="any">
-    <link rel="apple-touch-icon" href="apple-touch-icon.png?v=27">
-    <link rel="manifest" href="manifest.webmanifest?v=27">
-    <link rel="stylesheet" href="styles.css?v=27">
+    <link rel="icon" href="icon.ico?v=28" sizes="any">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png?v=28">
+    <link rel="manifest" href="manifest.webmanifest?v=28">
+    <link rel="stylesheet" href="styles.css?v=28">
   </head>
   <body>
     <main class="app-shell">
@@ -152,31 +152,56 @@
           </div>
         </section>
 
+        <section class="profile-section reminder-section" aria-labelledby="reminderTitle">
+          <div class="section-title-row">
+            <div>
+              <p class="eyebrow">Системные сообщения</p>
+              <h3 id="reminderTitle">Напоминания</h3>
+            </div>
+            <label class="switch-control" for="reminderToggle">
+              <input id="reminderToggle" type="checkbox">
+              <span class="switch-track" aria-hidden="true"><span></span></span>
+              <span>Включены</span>
+            </label>
+          </div>
+          <div class="reminder-grid">
+            <label for="morningTimeInput">
+              <span>Первое</span>
+              <input id="morningTimeInput" type="time" value="10:00">
+            </label>
+            <label for="eveningTimeInput">
+              <span>Второе</span>
+              <input id="eveningTimeInput" type="time" value="16:00">
+            </label>
+          </div>
+          <div class="reminder-meta">
+            <span>Часовой пояс</span>
+            <strong id="reminderTimezone">Europe/Moscow</strong>
+          </div>
+          <div class="reminder-actions">
+            <button class="secondary-button" id="refreshTimezoneButton" type="button">По времени устройства</button>
+            <button class="secondary-button" id="testNotificationButton" type="button">Проверить уведомление</button>
+          </div>
+          <p class="reminder-status" id="reminderStatus">Включи напоминания один раз на каждом устройстве.</p>
+        </section>
+
         <section class="profile-section sync-section" aria-label="Синхронизация">
           <div class="section-title-row">
             <h3>Синхронизация</h3>
             <span class="sync-badge">Cloud</span>
           </div>
           <div class="sync-form">
-            <label class="sync-field" for="syncUrlInput">
-              <span>Supabase URL</span>
-              <input id="syncUrlInput" type="url" inputmode="url" autocomplete="off" placeholder="https://project.supabase.co">
-            </label>
-            <label class="sync-field" for="syncKeyInput">
-              <span>Anon key</span>
-              <input id="syncKeyInput" type="password" autocomplete="off" placeholder="eyJ...">
-            </label>
             <label class="sync-field" for="syncCodeInput">
               <span>Облачный пароль</span>
               <input id="syncCodeInput" type="text" autocomplete="off" placeholder="arman-progress-2026">
             </label>
           </div>
           <div class="sync-actions">
-            <button class="primary-button" id="saveSyncSettings" type="button">Включить автосинхронизацию</button>
+            <button class="primary-button" id="saveSyncSettings" type="button">Подключить облако</button>
             <button class="secondary-button" id="pullSyncButton" type="button">Обновить сейчас</button>
             <button class="secondary-button" id="pushSyncButton" type="button">Сохранить сейчас</button>
           </div>
-          <p class="sync-status" id="syncStatus">Один раз введи Supabase URL, ключ и облачный пароль. После этого изменения будут синхронизироваться автоматически.</p>
+          <p class="sync-status" id="syncStatus">Облачный пароль сохраняется на устройстве. После подключения изменения синхронизируются автоматически.</p>
         </section>
       </section>
     </div>
@@ -195,6 +220,8 @@
             <button class="icon-button close-button" id="closeDay" type="button" aria-label="Закрыть день" title="Закрыть">×</button>
           </div>
         </div>
+
+        <p class="locked-day-notice" id="lockedDayNotice" hidden>День завершён. Данные сохранены без возможности изменения.</p>
 
         <div class="focus-line">
           <span>Фокус</span>
@@ -248,6 +275,6 @@
       </section>
     </div>
 
-    <script src="script.js?v=27"></script>
+    <script src="script.js?v=28"></script>
   </body>
 </html>

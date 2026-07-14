@@ -757,8 +757,127 @@ h2 {
 
 .sync-form {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 420px);
   gap: 10px;
+}
+
+.switch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.switch-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.switch-track {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-soft);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.switch-track span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.switch-control input:checked + .switch-track {
+  border-color: var(--blue);
+  background: rgba(26, 115, 232, 0.16);
+}
+
+.switch-control input:checked + .switch-track span {
+  transform: translateX(18px);
+  background: var(--blue);
+}
+
+.switch-control input:focus-visible + .switch-track {
+  outline: 3px solid rgba(40, 111, 180, 0.18);
+  outline-offset: 2px;
+}
+
+.reminder-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 180px));
+  gap: 10px;
+}
+
+.reminder-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.reminder-grid label > span,
+.reminder-meta span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.reminder-grid input {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: var(--ink);
+  background: var(--panel);
+  font: inherit;
+}
+
+.reminder-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 370px;
+}
+
+.reminder-meta strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+  font-size: 0.82rem;
+}
+
+.reminder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.reminder-status {
+  min-height: 20px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.reminder-status.ok {
+  color: var(--green);
+}
+
+.reminder-status.error {
+  color: #c5221f;
 }
 
 .sync-field {
@@ -841,6 +960,27 @@ h2 {
 
 .sync-status.busy {
   color: var(--blue);
+}
+
+.locked-day-notice {
+  margin: 14px 0 0;
+  border-left: 3px solid var(--line-strong);
+  padding: 9px 12px;
+  color: var(--muted);
+  background: var(--panel-soft);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.day-panel.is-locked .check-button,
+.day-panel.is-locked input,
+.day-panel.is-locked textarea {
+  cursor: default;
+}
+
+.day-panel.is-locked .task-row,
+.day-panel.is-locked .notes-area {
+  opacity: 0.88;
 }
 
 .day-actions {
@@ -1089,6 +1229,15 @@ textarea:focus,
   }
 
   .sync-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .reminder-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reminder-actions {
     display: grid;
     grid-template-columns: 1fr;
   }
@@ -1808,7 +1957,8 @@ html[data-theme="knight"] .goal-item strong {
 }
 
 html[data-theme="knight"] .goal-add-row,
-html[data-theme="knight"] .sync-actions {
+html[data-theme="knight"] .sync-actions,
+html[data-theme="knight"] .reminder-actions {
   gap: 10px;
 }
 
@@ -1847,6 +1997,36 @@ html[data-theme="knight"] .text-button,
 html[data-theme="knight"] .task-row.is-editable .task-content-button::after,
 html[data-theme="knight"] .sync-status.busy {
   color: #c9deee;
+}
+
+html[data-theme="knight"] .switch-track {
+  border-color: rgba(209, 225, 239, 0.26);
+  background: rgba(2, 9, 14, 0.76);
+}
+
+html[data-theme="knight"] .switch-track span {
+  background: #7f8d98;
+}
+
+html[data-theme="knight"] .switch-control input:checked + .switch-track {
+  border-color: rgba(224, 238, 250, 0.62);
+  background: rgba(164, 201, 229, 0.14);
+  box-shadow: 0 0 12px rgba(219, 236, 250, 0.1);
+}
+
+html[data-theme="knight"] .switch-control input:checked + .switch-track span {
+  background: #e7f3fb;
+  box-shadow: 0 0 10px rgba(222, 240, 253, 0.45);
+}
+
+html[data-theme="knight"] .reminder-status.ok {
+  color: #bcded0;
+}
+
+html[data-theme="knight"] .locked-day-notice {
+  border-left-color: rgba(226, 239, 249, 0.56);
+  color: #aebdca;
+  background: rgba(148, 179, 203, 0.08);
 }
 
 html[data-theme="knight"] .sync-badge {
@@ -2226,6 +2406,8 @@ html[data-theme="knight"] * {
   html[data-theme="knight"] .goal-add-row,
   html[data-theme="knight"] .sync-form,
   html[data-theme="knight"] .sync-actions,
+  html[data-theme="knight"] .reminder-grid,
+  html[data-theme="knight"] .reminder-actions,
   html[data-theme="knight"] .task-editor-actions {
     grid-template-columns: 1fr;
   }

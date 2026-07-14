@@ -1,16 +1,21 @@
 (function () {
   const planStartDate = new Date(2026, 6, 4);
   const planEndDate = new Date(2026, 7, 4);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const storageKey = "month-progress-v1";
+  const cloudFunctionUrl = "https://bclhwefsswxtqtwzppik.supabase.co/functions/v1/crest-api";
+  const cloudPublishableKey = "sb_publishable_CDziEC3GM9o0di7zIqw9vw_PgeCT9oJ";
+  const vapidPublicKey = "BA1j44cNJV6QoirknYZOiFPQaLiygwxyVmRbaFCcIm3V5lFmTeM-S1SgctoZXNNR5makhB7ip44OcXjDXNMeRQc";
 
   const weekdayNames = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
   const monthNames = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
   const calendarMonthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 
   const state = loadState();
+  let now = new Date();
+  let today = currentDayDate();
   const plannedDays = buildPlannedDays();
+  migrateState();
+  sealPastDays({ persist: false });
   let visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   let selectedKey = formatKey(today);
   let activeModal = null;
@@ -21,6 +26,7 @@
   let isCloudBusy = false;
   let editingTaskIndex = null;
   let calendarTouchStart = null;
+  let dateWatchTimer = null;
 
   const calendarGrid = document.querySelector("#calendarGrid");
   const monthTitle = document.querySelector("#monthTitle");
@@ -28,6 +34,7 @@
   const nextMonthButton = document.querySelector("#nextMonth");
   const todayButton = document.querySelector("#todayButton");
   const dayModal = document.querySelector("#dayModal");
+  const dayPanel = dayModal.querySelector(".day-panel");
   const modalBackdrop = document.querySelector("#modalBackdrop");
   const closeDay = document.querySelector("#closeDay");
   const profileModal = document.querySelector("#profileModal");
@@ -44,6 +51,7 @@
   const selectedWeekday = document.querySelector("#selectedWeekday");
   const selectedDate = document.querySelector("#selectedDate");
   const loadPill = document.querySelector("#loadPill");
+  const lockedDayNotice = document.querySelector("#lockedDayNotice");
   const dayFocus = document.querySelector("#dayFocus");
   const taskList = document.querySelector("#taskList");
   const editDayButton = document.querySelector("#editDayButton");
@@ -71,13 +79,18 @@
   const newGoalKicker = document.querySelector("#newGoalKicker");
   const newGoalTitle = document.querySelector("#newGoalTitle");
   const addGoalButton = document.querySelector("#addGoalButton");
-  const syncUrlInput = document.querySelector("#syncUrlInput");
-  const syncKeyInput = document.querySelector("#syncKeyInput");
   const syncCodeInput = document.querySelector("#syncCodeInput");
   const saveSyncSettingsButton = document.querySelector("#saveSyncSettings");
   const pullSyncButton = document.querySelector("#pullSyncButton");
   const pushSyncButton = document.querySelector("#pushSyncButton");
   const syncStatus = document.querySelector("#syncStatus");
+  const reminderToggle = document.querySelector("#reminderToggle");
+  const morningTimeInput = document.querySelector("#morningTimeInput");
+  const eveningTimeInput = document.querySelector("#eveningTimeInput");
+  const reminderTimezone = document.querySelector("#reminderTimezone");
+  const refreshTimezoneButton = document.querySelector("#refreshTimezoneButton");
+  const testNotificationButton = document.querySelector("#testNotificationButton");
+  const reminderStatus = document.querySelector("#reminderStatus");
   const themeColor = document.querySelector("#themeColor");
   const themeChoices = document.querySelectorAll("[data-theme-choice]");
 
@@ -87,8 +100,13 @@
   renderGoals();
   renderProfilePhoto();
   renderSyncSettings();
+  renderReminderSettings();
   normalizeStoredProfilePhoto();
   startAutoSync();
+  startDateWatcher();
+  refreshNotificationSubscription();
+  openRequestedDay();
+  if ("clearAppBadge" in navigator) navigator.clearAppBadge().catch(() => {});
 
   profileButton.addEventListener("click", openProfile);
   previousMonthButton.addEventListener("click", () => changeMonth(-1));
@@ -116,6 +134,11 @@
   saveSyncSettingsButton.addEventListener("click", saveSyncSettings);
   pullSyncButton.addEventListener("click", pullCloudState);
   pushSyncButton.addEventListener("click", pushCloudState);
+  reminderToggle.addEventListener("change", handleReminderToggle);
+  morningTimeInput.addEventListener("change", saveReminderSettings);
+  eveningTimeInput.addEventListener("change", saveReminderSettings);
+  refreshTimezoneButton.addEventListener("click", refreshReminderTimezone);
+  testNotificationButton.addEventListener("click", sendTestNotification);
   themeChoices.forEach((button) => {
     button.addEventListener("click", () => applyTheme(button.dataset.themeChoice, { save: true }));
   });
@@ -131,15 +154,25 @@
   });
 
   energyRange.addEventListener("input", () => {
+    if (isDayLocked(selectedKey)) return;
     const entry = ensureEntry(selectedKey);
     entry.energy = Number(energyRange.value);
+    entry.updatedAt = new Date().toISOString();
     energyValue.textContent = entry.energy;
     saveState();
   });
 
   dayNotes.addEventListener("input", () => {
-    ensureEntry(selectedKey).notes = dayNotes.value;
+    if (isDayLocked(selectedKey)) return;
+    const entry = ensureEntry(selectedKey);
+    entry.notes = dayNotes.value;
+    entry.updatedAt = new Date().toISOString();
     saveState();
+  });
+
+  window.addEventListener("online", handleAppResume);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") handleAppResume();
   });
 
   function buildPlannedDays() {
@@ -318,6 +351,19 @@
   }
 
   function effectiveDay(day) {
+    const locked = state.lockedDays && state.lockedDays[day.key];
+    if (locked) {
+      return {
+        ...day,
+        focus: locked.focus || day.focus,
+        tasks: Array.isArray(locked.tasks) ? locked.tasks : day.tasks
+      };
+    }
+
+    return editableDay(day);
+  }
+
+  function editableDay(day) {
     const custom = state.dayPlans && state.dayPlans[day.key];
     if (!custom) return day;
     return {
@@ -348,12 +394,14 @@
   }
 
   function ensureDayPlan(key) {
+    if (isDayLocked(key)) return effectiveDay(dayForKey(key));
     const day = dayForKey(key);
     state.dayPlans = state.dayPlans || {};
     if (!state.dayPlans[key]) {
       state.dayPlans[key] = {
         focus: day.focus,
-        tasks: cloneTasks(day.tasks)
+        tasks: cloneTasks(day.tasks),
+        updatedAt: new Date().toISOString()
       };
     }
     return state.dayPlans[key];
@@ -361,6 +409,128 @@
 
   function cloneTasks(tasks) {
     return tasks.map((task) => ({ ...task }));
+  }
+
+  function migrateState() {
+    const fallbackUpdatedAt = state.localUpdatedAt || new Date().toISOString();
+    state.schemaVersion = 28;
+    state.lockedDays = state.lockedDays && typeof state.lockedDays === "object" ? state.lockedDays : {};
+    state.dayPlans = state.dayPlans && typeof state.dayPlans === "object" ? state.dayPlans : {};
+    state.reminderMorning = validTime(state.reminderMorning) ? state.reminderMorning : "10:00";
+    state.reminderEvening = validTime(state.reminderEvening) ? state.reminderEvening : "16:00";
+    state.reminderTimezone = state.reminderTimezone || detectedTimezone();
+    state.remindersEnabled = Boolean(state.remindersEnabled);
+    state.cloudRevision = Number(state.cloudRevision) || 0;
+
+    Object.values(state.dayPlans).forEach((plan) => {
+      if (plan && !plan.updatedAt) plan.updatedAt = fallbackUpdatedAt;
+    });
+
+    Object.keys(state).forEach((key) => {
+      if (!isDateKey(key) || !state[key] || typeof state[key] !== "object") return;
+      if (!state[key].updatedAt) state[key].updatedAt = fallbackUpdatedAt;
+    });
+
+    delete state.syncUrl;
+    delete state.syncKey;
+    localStorage.setItem(storageKey, JSON.stringify(state));
+  }
+
+  function detectedTimezone() {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Moscow";
+    } catch (error) {
+      return "Europe/Moscow";
+    }
+  }
+
+  function currentDayDate(reference = new Date()) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: state.reminderTimezone || detectedTimezone(),
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).formatToParts(reference);
+      const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+      return new Date(Number(values.year), Number(values.month) - 1, Number(values.day));
+    } catch (error) {
+      return new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
+    }
+  }
+
+  function isDateKey(key) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(key);
+  }
+
+  function validTime(value) {
+    return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || ""));
+  }
+
+  function isDayLocked(key) {
+    if (state.lockedDays && state.lockedDays[key]) return true;
+    return dayForKey(key).date < today;
+  }
+
+  function sealPastDays(options = {}) {
+    state.lockedDays = state.lockedDays || {};
+    let changed = false;
+
+    trackedDays().forEach((day) => {
+      if (day.date >= today || state.lockedDays[day.key]) return;
+      const visibleDay = editableDay(day);
+      const entry = state[day.key] || { tasks: {}, energy: 5, notes: "" };
+      state.lockedDays[day.key] = {
+        focus: visibleDay.focus,
+        tasks: cloneTasks(visibleDay.tasks),
+        entry: JSON.parse(JSON.stringify(entry)),
+        lockedAt: new Date().toISOString()
+      };
+      changed = true;
+    });
+
+    if (!changed) return false;
+    if (options.persist === false) {
+      localStorage.setItem(storageKey, JSON.stringify(state));
+    } else {
+      saveState();
+    }
+    return true;
+  }
+
+  function refreshCurrentDate() {
+    now = new Date();
+    const nextToday = currentDayDate(now);
+    if (formatKey(nextToday) === formatKey(today)) return false;
+    today = nextToday;
+    visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    sealPastDays();
+    renderCalendar();
+    renderStats();
+    if (activeModal === "day") renderDay();
+    return true;
+  }
+
+  function startDateWatcher() {
+    clearInterval(dateWatchTimer);
+    dateWatchTimer = setInterval(refreshCurrentDate, 60000);
+  }
+
+  function handleAppResume() {
+    refreshCurrentDate();
+    sealPastDays();
+    pullCloudState({ auto: true });
+    refreshNotificationSubscription();
+  }
+
+  function openRequestedDay() {
+    const requested = new URLSearchParams(window.location.search).get("date");
+    if (!requested || !isDateKey(requested)) return;
+    const requestedDay = dayForKey(requested);
+    visibleMonth = new Date(requestedDay.date.getFullYear(), requestedDay.date.getMonth(), 1);
+    renderCalendar();
+    openDay(requested);
+    window.history.replaceState({}, "", window.location.pathname);
   }
 
   function defaultGoals() {
@@ -505,6 +675,7 @@
         .then((avatarDataUrl) => {
           state.profilePhoto = avatarDataUrl;
           state.profilePhotoVersion = 5;
+          state.profileUpdatedAt = new Date().toISOString();
           saveState();
           renderProfilePhoto();
         })
@@ -692,6 +863,7 @@
 
     if (options.save) {
       state.theme = selectedTheme;
+      state.themeUpdatedAt = new Date().toISOString();
       saveState();
     }
   }
@@ -702,6 +874,7 @@
       .then((avatarDataUrl) => {
         state.profilePhoto = avatarDataUrl;
         state.profilePhotoVersion = 5;
+        state.profileUpdatedAt = new Date().toISOString();
         saveState();
         renderProfilePhoto();
       })
@@ -737,6 +910,7 @@
       .then((avatarDataUrl) => {
         state.profilePhoto = avatarDataUrl;
         state.profilePhotoVersion = 5;
+        state.profileUpdatedAt = new Date().toISOString();
         saveState();
         renderProfilePhoto();
       })
@@ -746,7 +920,8 @@
   function renderDay() {
     const sourceDay = dayForKey(selectedKey);
     const day = effectiveDay(sourceDay);
-    const entry = ensureEntry(sourceDay.key);
+    const locked = isDayLocked(sourceDay.key);
+    const entry = locked ? readEntry(sourceDay.key) : ensureEntry(sourceDay.key);
     const status = dayStatus(day, entry);
     selectedWeekday.textContent = weekdayNames[sourceDay.date.getDay()];
     selectedDate.textContent = formatDate(sourceDay.date);
@@ -754,28 +929,35 @@
     loadPill.className = `load-pill ${status.kind}`;
     dayFocus.textContent = day.focus;
     editDayButton.textContent = isEditingDay ? "Готово" : "Изменить";
-    dayFocus.contentEditable = isEditingDay ? "true" : "false";
-    dayFocus.classList.toggle("is-editable", isEditingDay);
-    dayFocus.setAttribute("aria-label", isEditingDay ? "Изменить фокус дня" : "Фокус дня");
-    addTaskButton.hidden = !isEditingDay;
+    editDayButton.hidden = locked;
+    lockedDayNotice.hidden = !locked;
+    dayPanel.classList.toggle("is-locked", locked);
+    dayFocus.contentEditable = isEditingDay && !locked ? "true" : "false";
+    dayFocus.classList.toggle("is-editable", isEditingDay && !locked);
+    dayFocus.setAttribute("aria-label", isEditingDay && !locked ? "Изменить фокус дня" : "Фокус дня");
+    addTaskButton.hidden = !isEditingDay || locked;
     energyRange.value = entry.energy;
+    energyRange.disabled = locked;
     energyValue.textContent = entry.energy;
     dayNotes.value = entry.notes || "";
+    dayNotes.readOnly = locked;
     taskList.innerHTML = "";
 
     day.tasks.forEach((task) => {
       const row = document.createElement("div");
       const done = Boolean(entry.tasks[task.id]);
-      row.className = `task-row ${done ? "done" : ""} ${isEditingDay ? "is-editable" : ""}`;
+      row.className = `task-row ${done ? "done" : ""} ${isEditingDay && !locked ? "is-editable" : ""}`;
       row.innerHTML = `
-        <button class="check-button" type="button" aria-label="Отметить задачу" ${isEditingDay ? "disabled" : ""}>${done ? "✓" : ""}</button>
-        <button class="task-content-button" type="button" ${isEditingDay ? "" : "disabled"} aria-label="Изменить задачу ${escapeAttribute(task.title)}">
+        <button class="check-button" type="button" aria-label="Отметить задачу" ${isEditingDay || locked ? "disabled" : ""}>${done ? "✓" : ""}</button>
+        <button class="task-content-button" type="button" ${isEditingDay && !locked ? "" : "disabled"} aria-label="Изменить задачу ${escapeAttribute(task.title)}">
           <span class="task-title">${escapeHtml(task.title)}</span>
           <span class="task-meta">${escapeHtml(task.meta)}</span>
         </button>
       `;
       row.querySelector("button").addEventListener("click", () => {
+        if (locked) return;
         entry.tasks[task.id] = !entry.tasks[task.id];
+        entry.updatedAt = new Date().toISOString();
         saveState();
         renderDay();
         renderCalendar();
@@ -787,6 +969,7 @@
   }
 
   function toggleDayEditor() {
+    if (isDayLocked(selectedKey)) return;
     isEditingDay = !isEditingDay;
     if (isEditingDay) ensureDayPlan(selectedKey);
     if (!isEditingDay) closeTaskEditor();
@@ -794,9 +977,10 @@
   }
 
   function saveDayFocus() {
-    if (!isEditingDay) return;
+    if (!isEditingDay || isDayLocked(selectedKey)) return;
     const plan = ensureDayPlan(selectedKey);
     plan.focus = dayFocus.textContent.trim() || "Без фокуса";
+    plan.updatedAt = new Date().toISOString();
     saveState();
     renderCalendar();
   }
@@ -808,6 +992,7 @@
   }
 
   function openTaskEditor(index) {
+    if (isDayLocked(selectedKey)) return;
     const plan = ensureDayPlan(selectedKey);
     const task = plan.tasks[index];
     if (!task) return;
@@ -823,6 +1008,7 @@
   }
 
   function openAddTaskEditor() {
+    if (isDayLocked(selectedKey)) return;
     editingTaskIndex = null;
     taskEditorEyebrow.textContent = "Новая задача";
     taskEditorTitle.textContent = "Добавить задачу";
@@ -847,6 +1033,7 @@
   }
 
   function saveTaskFromEditor() {
+    if (isDayLocked(selectedKey)) return;
     const title = taskTitleInput.value.trim();
     if (!title) {
       taskTitleInput.focus();
@@ -867,6 +1054,8 @@
       plan.tasks[editingTaskIndex].type = taskTypeInput.value;
     }
 
+    plan.updatedAt = new Date().toISOString();
+
     saveState();
     closeTaskEditor();
     renderDay();
@@ -875,14 +1064,16 @@
   }
 
   function deleteTaskFromEditor() {
-    if (editingTaskIndex === null) return;
+    if (editingTaskIndex === null || isDayLocked(selectedKey)) return;
     const plan = ensureDayPlan(selectedKey);
     const removed = plan.tasks[editingTaskIndex];
     plan.tasks.splice(editingTaskIndex, 1);
     if (removed) {
       const entry = ensureEntry(selectedKey);
       delete entry.tasks[removed.id];
+      entry.updatedAt = new Date().toISOString();
     }
+    plan.updatedAt = new Date().toISOString();
     saveState();
     closeTaskEditor();
     renderDay();
@@ -903,9 +1094,12 @@
       const visibleDay = effectiveDay(day);
       const entry = readEntry(day.key);
       const required = visibleDay.tasks.filter((task) => task.type === "habit");
-      if (day.date <= today) {
+      if (day.date < today) {
         const requiredDone = required.length > 0 && required.every((task) => entry.tasks[task.id]);
         currentStreak = requiredDone ? currentStreak + 1 : 0;
+      } else if (formatKey(day.date) === formatKey(today)) {
+        const requiredDone = required.length > 0 && required.every((task) => entry.tasks[task.id]);
+        if (requiredDone) currentStreak += 1;
       }
 
       visibleDay.tasks.forEach((task) => {
@@ -938,6 +1132,12 @@
     Object.keys(state.dayPlans || {}).forEach((key) => {
       result.set(key, dayForKey(key));
     });
+    Object.keys(state).filter(isDateKey).forEach((key) => {
+      result.set(key, dayForKey(key));
+    });
+    Object.keys(state.lockedDays || {}).forEach((key) => {
+      result.set(key, dayForKey(key));
+    });
     return Array.from(result.values()).sort((left, right) => left.date - right.date);
   }
 
@@ -968,6 +1168,7 @@
     const list = goals();
     if (!list[index]) return;
     list[index][field] = value;
+    state.goalsUpdatedAt = new Date().toISOString();
     saveState();
   }
 
@@ -984,31 +1185,30 @@
 
     newGoalKicker.value = "";
     newGoalTitle.value = "";
+    state.goalsUpdatedAt = new Date().toISOString();
     saveState();
     renderGoals();
   }
 
   function removeGoal(index) {
     goals().splice(index, 1);
+    state.goalsUpdatedAt = new Date().toISOString();
     saveState();
     renderGoals();
   }
 
   function renderSyncSettings() {
-    syncUrlInput.value = state.syncUrl || "";
-    syncKeyInput.value = state.syncKey || "";
     syncCodeInput.value = state.syncCode || "";
   }
 
   function saveSyncSettings() {
     storeSyncSettings();
-    setSyncStatus("Автосинхронизация включена. Теперь изменения будут сохраняться в облако сами.", "ok");
-    pullCloudState({ auto: true, pushIfEmpty: true });
+    if (!getSyncSettings()) return;
+    setSyncStatus("Подключаю защищённую автосинхронизацию...", "busy");
+    pullCloudState({ pushIfEmpty: true });
   }
 
   function storeSyncSettings() {
-    state.syncUrl = cleanUrl(syncUrlInput.value);
-    state.syncKey = syncKeyInput.value.trim();
     state.syncCode = syncCodeInput.value.trim();
     saveState({ skipCloud: true });
     startAutoSync();
@@ -1016,14 +1216,12 @@
 
   function getSyncSettings(options = {}) {
     const settings = {
-      url: cleanUrl(syncUrlInput.value || state.syncUrl || ""),
-      key: (syncKeyInput.value || state.syncKey || "").trim(),
       code: (syncCodeInput.value || state.syncCode || "").trim()
     };
 
-    if (!settings.url || !settings.key || !settings.code) {
+    if (!settings.code) {
       if (!options.silent) {
-        setSyncStatus("Нужны Supabase URL, ключ и один облачный пароль для телефона и ноутбука.", "error");
+        setSyncStatus("Введи один облачный пароль для телефона и ноутбука.", "error");
       }
       return null;
     }
@@ -1043,30 +1241,23 @@
     isCloudBusy = true;
     setSyncBusy(true);
     if (!options.auto) setSyncStatus("Сохраняю прогресс в облако...", "busy");
-    const syncedAt = new Date().toISOString();
+    cloudSaveTimer = null;
 
     try {
-      const response = await fetch(`${settings.url}/rest/v1/progress_sync?on_conflict=sync_code`, {
-        method: "POST",
-        headers: cloudHeaders(settings, { Prefer: "resolution=merge-duplicates" }),
-        body: JSON.stringify({
-          sync_code: settings.code,
-          payload: exportProgressState(),
-          updated_at: syncedAt
-        })
+      const result = await cloudRequest("push", settings, {
+        payload: exportProgressState(),
+        baseRevision: state.cloudRevision || 0,
+        reminderDays: buildReminderDays()
       });
-
-      if (!response.ok) throw new Error(await response.text());
-      state.cloudUpdatedAt = syncedAt;
-      localStorage.setItem(storageKey, JSON.stringify(state));
+      applyCloudState(result.payload, settings, result.updatedAt, result.revision);
       if (!options.auto) {
-        setSyncStatus("Готово. Автосинхронизация работает: телефон и ноутбук будут подтягивать изменения сами.", "ok");
+        setSyncStatus("Готово. Телефон и ноутбук подключены к защищённому облаку.", "ok");
       } else {
         setSyncStatus("Сохранено в облако.", "ok");
       }
     } catch (error) {
       if (!options.auto) {
-        setSyncStatus("Не получилось сохранить в облако. Проверь Supabase URL, ключ и таблицу.", "error");
+        setSyncStatus("Не получилось сохранить в облако. Проверь интернет и облачный пароль.", "error");
       }
     } finally {
       isCloudBusy = false;
@@ -1076,6 +1267,7 @@
 
   async function pullCloudState(options = {}) {
     if (isCloudBusy && options.auto) return;
+    if (options.auto && cloudSaveTimer) return;
     const settings = getSyncSettings({ silent: options.auto });
     if (!settings) return;
 
@@ -1088,35 +1280,22 @@
     if (!options.auto) setSyncStatus("Загружаю прогресс из облака...", "busy");
 
     try {
-      const response = await fetch(
-        `${settings.url}/rest/v1/progress_sync?sync_code=eq.${encodeURIComponent(settings.code)}&select=payload,updated_at`,
-        { headers: cloudHeaders(settings) }
-      );
-
-      if (!response.ok) throw new Error(await response.text());
-      const rows = await response.json();
-      if (!rows.length || !rows[0].payload) {
-        if (options.pushIfEmpty) {
-          isCloudBusy = false;
-          setSyncBusy(false);
-          pushCloudState({ auto: true });
-          return;
-        }
-        if (!options.auto) {
-          setSyncStatus("В облаке пока нет прогресса для этого пароля. Сначала сохрани изменения на одном устройстве.", "error");
-        }
-        return;
-      }
-
-      if (!state.cloudUpdatedAt || new Date(rows[0].updated_at) > new Date(state.cloudUpdatedAt)) {
-        applyCloudState(rows[0].payload, settings, rows[0].updated_at);
+      const result = await cloudRequest("pull", settings);
+      if (!state.cloudRevision || result.revision > state.cloudRevision) {
+        applyCloudState(result.payload, settings, result.updatedAt, result.revision);
         setSyncStatus(options.auto ? "Подтянул свежие изменения из облака." : "Прогресс загружен. Календарь, профиль и фото обновлены.", "ok");
       } else if (!options.auto) {
         setSyncStatus("У тебя уже свежая версия прогресса.", "ok");
       }
     } catch (error) {
+      if (error.code === "NOT_FOUND" && options.pushIfEmpty) {
+        isCloudBusy = false;
+        setSyncBusy(false);
+        pushCloudState({ auto: true });
+        return;
+      }
       if (!options.auto) {
-        setSyncStatus("Не получилось загрузить прогресс. Проверь подключение и настройки Supabase.", "error");
+        setSyncStatus("Не получилось загрузить прогресс. Проверь интернет и облачный пароль.", "error");
       }
     } finally {
       isCloudBusy = false;
@@ -1126,22 +1305,31 @@
 
   function exportProgressState() {
     const copy = JSON.parse(JSON.stringify(state));
-    delete copy.syncUrl;
-    delete copy.syncKey;
     delete copy.syncCode;
     delete copy.cloudUpdatedAt;
+    delete copy.cloudRevision;
+    delete copy.remindersEnabled;
+    delete copy.notificationEndpoint;
     return copy;
   }
 
-  function applyCloudState(payload, settings, cloudUpdatedAt) {
+  function applyCloudState(payload, settings, cloudUpdatedAt, cloudRevision) {
+    const localDevice = {
+      remindersEnabled: state.remindersEnabled,
+      notificationEndpoint: state.notificationEndpoint
+    };
     isApplyingCloud = true;
     Object.keys(state).forEach((key) => delete state[key]);
     Object.assign(state, payload, {
-      syncUrl: settings.url,
-      syncKey: settings.key,
       syncCode: settings.code,
-      cloudUpdatedAt
+      cloudUpdatedAt,
+      cloudRevision,
+      remindersEnabled: localDevice.remindersEnabled,
+      notificationEndpoint: localDevice.notificationEndpoint
     });
+    migrateState();
+    today = currentDayDate();
+    sealPastDays({ persist: false });
     saveState({ skipCloud: true });
     isApplyingCloud = false;
     renderCalendar();
@@ -1149,6 +1337,7 @@
     renderGoals();
     renderProfilePhoto();
     renderSyncSettings();
+    renderReminderSettings();
     applyTheme(state.theme || "light");
     if (activeModal === "day") renderDay();
   }
@@ -1174,18 +1363,22 @@
     }, 900);
   }
 
-  function cloudHeaders(settings, extra = {}) {
-    const headers = {
-      apikey: settings.key,
-      "Content-Type": "application/json",
-      ...extra
-    };
-
-    if (!settings.key.startsWith("sb_publishable_")) {
-      headers.Authorization = `Bearer ${settings.key}`;
+  async function cloudRequest(action, settings, data = {}) {
+    const response = await fetch(cloudFunctionUrl, {
+      method: "POST",
+      headers: {
+        apikey: cloudPublishableKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ action, code: settings.code, ...data })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(result.error || "Cloud request failed");
+      error.code = result.code || "CLOUD_ERROR";
+      throw error;
     }
-
-    return headers;
+    return result;
   }
 
   function setSyncBusy(isBusy) {
@@ -1199,8 +1392,203 @@
     syncStatus.className = `sync-status ${type || ""}`.trim();
   }
 
-  function cleanUrl(value) {
-    return value.trim().replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
+  function buildReminderDays() {
+    const result = {};
+    for (let offset = 0; offset <= 45; offset += 1) {
+      const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
+      const day = effectiveDay(dayForDate(date));
+      const entry = readEntry(day.key);
+      const incomplete = day.tasks
+        .filter((task) => !entry.tasks[task.id])
+        .map((task) => ({ id: task.id, title: task.title }));
+      result[day.key] = { total: day.tasks.length, incomplete };
+    }
+    return result;
+  }
+
+  function renderReminderSettings() {
+    reminderToggle.checked = Boolean(state.remindersEnabled);
+    morningTimeInput.value = state.reminderMorning || "10:00";
+    eveningTimeInput.value = state.reminderEvening || "16:00";
+    reminderTimezone.textContent = state.reminderTimezone || detectedTimezone();
+    const supported = pushSupported();
+    reminderToggle.disabled = !supported;
+    morningTimeInput.disabled = !supported;
+    eveningTimeInput.disabled = !supported;
+    testNotificationButton.disabled = !supported || !state.remindersEnabled;
+    if (!supported) {
+      setReminderStatus("Системные уведомления не поддерживаются этим режимом браузера.", "error");
+    }
+  }
+
+  function pushSupported() {
+    return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  }
+
+  async function handleReminderToggle() {
+    if (reminderToggle.checked) {
+      await enableReminders();
+    } else {
+      await disableReminders();
+    }
+  }
+
+  async function enableReminders() {
+    const settings = getSyncSettings({ silent: true });
+    if (!settings) {
+      reminderToggle.checked = false;
+      setReminderStatus("Сначала подключи облако одним паролем.", "error");
+      syncCodeInput.focus();
+      return;
+    }
+    if (!pushSupported()) {
+      reminderToggle.checked = false;
+      setReminderStatus("На iPhone открой Crest с экрана Домой, затем попробуй снова.", "error");
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        reminderToggle.checked = false;
+        state.remindersEnabled = false;
+        saveState({ skipCloud: true });
+        setReminderStatus("Разрешение не выдано. Его можно изменить в настройках уведомлений устройства.", "error");
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+        });
+      }
+
+      state.remindersEnabled = true;
+      state.notificationEndpoint = subscription.endpoint;
+      saveReminderValues();
+      await registerNotificationSubscription(subscription, settings);
+      renderReminderSettings();
+      setReminderStatus("Уведомления включены на этом устройстве.", "ok");
+    } catch (error) {
+      reminderToggle.checked = false;
+      state.remindersEnabled = false;
+      saveState({ skipCloud: true });
+      setReminderStatus("Не получилось включить уведомления. Проверь системное разрешение.", "error");
+    }
+  }
+
+  async function disableReminders() {
+    state.remindersEnabled = false;
+    saveState({ skipCloud: true });
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      const settings = getSyncSettings({ silent: true });
+      if (subscription && settings) {
+        await cloudRequest("unsubscribe", settings, { endpoint: subscription.endpoint });
+        await subscription.unsubscribe();
+      }
+    } catch (error) {
+      // The local setting still stays disabled if the network is temporarily unavailable.
+    }
+    delete state.notificationEndpoint;
+    localStorage.setItem(storageKey, JSON.stringify(state));
+    renderReminderSettings();
+    setReminderStatus("Уведомления выключены на этом устройстве.", "");
+  }
+
+  function saveReminderValues() {
+    state.reminderMorning = validTime(morningTimeInput.value) ? morningTimeInput.value : "10:00";
+    state.reminderEvening = validTime(eveningTimeInput.value) ? eveningTimeInput.value : "16:00";
+    state.reminderTimezone = state.reminderTimezone || detectedTimezone();
+    state.reminderUpdatedAt = new Date().toISOString();
+    saveState();
+  }
+
+  async function saveReminderSettings() {
+    saveReminderValues();
+    renderReminderSettings();
+    if (!state.remindersEnabled) return;
+    await refreshNotificationSubscription({ showStatus: true });
+  }
+
+  async function refreshReminderTimezone() {
+    state.reminderTimezone = detectedTimezone();
+    today = currentDayDate();
+    sealPastDays();
+    saveReminderValues();
+    renderReminderSettings();
+    renderCalendar();
+    renderStats();
+    if (state.remindersEnabled) await refreshNotificationSubscription({ showStatus: true });
+  }
+
+  async function refreshNotificationSubscription(options = {}) {
+    if (!state.remindersEnabled || !pushSupported() || Notification.permission !== "granted") return;
+    const settings = getSyncSettings({ silent: true });
+    if (!settings) return;
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        if (options.showStatus) setReminderStatus("Подписка устройства потеряна. Выключи и снова включи напоминания.", "error");
+        return;
+      }
+      state.notificationEndpoint = subscription.endpoint;
+      localStorage.setItem(storageKey, JSON.stringify(state));
+      await registerNotificationSubscription(subscription, settings);
+      if (options.showStatus) setReminderStatus("Настройки напоминаний обновлены.", "ok");
+    } catch (error) {
+      if (options.showStatus) setReminderStatus("Не получилось обновить подписку. Проверь интернет.", "error");
+    }
+  }
+
+  async function registerNotificationSubscription(subscription, settings) {
+    await cloudRequest("subscribe", settings, {
+      subscription: subscription.toJSON(),
+      deviceName: deviceName(),
+      timezone: state.reminderTimezone,
+      morningTime: state.reminderMorning,
+      eveningTime: state.reminderEvening,
+      reminderDays: buildReminderDays()
+    });
+  }
+
+  async function sendTestNotification() {
+    const settings = getSyncSettings({ silent: true });
+    if (!settings || !state.remindersEnabled || !state.notificationEndpoint) {
+      setReminderStatus("Сначала включи уведомления на этом устройстве.", "error");
+      return;
+    }
+    testNotificationButton.disabled = true;
+    setReminderStatus("Отправляю тестовое уведомление...", "");
+    try {
+      await cloudRequest("test_notification", settings, { endpoint: state.notificationEndpoint });
+      setReminderStatus("Тест отправлен. Уведомление должно появиться через несколько секунд.", "ok");
+    } catch (error) {
+      setReminderStatus("Тест не отправился. Проверь подключение и разрешение.", "error");
+    } finally {
+      testNotificationButton.disabled = false;
+    }
+  }
+
+  function setReminderStatus(message, type) {
+    reminderStatus.textContent = message;
+    reminderStatus.className = `reminder-status ${type || ""}`.trim();
+  }
+
+  function deviceName() {
+    return /iPhone|iPad|iPod/i.test(navigator.userAgent) ? "iPhone" : "Ноутбук";
+  }
+
+  function urlBase64ToUint8Array(value) {
+    const padding = "=".repeat((4 - (value.length % 4)) % 4);
+    const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = window.atob(base64);
+    return Uint8Array.from([...raw].map((character) => character.charCodeAt(0)));
   }
 
   function dayWord(count) {
@@ -1240,13 +1628,17 @@
   }
 
   function ensureEntry(key) {
+    const locked = state.lockedDays && state.lockedDays[key];
+    if (locked && locked.entry) return locked.entry;
     if (!state[key]) {
-      state[key] = { tasks: {}, energy: 5, notes: "" };
+      state[key] = { tasks: {}, energy: 5, notes: "", updatedAt: new Date().toISOString() };
     }
     return state[key];
   }
 
   function readEntry(key) {
+    const locked = state.lockedDays && state.lockedDays[key];
+    if (locked && locked.entry) return locked.entry;
     return state[key] || { tasks: {}, energy: 5, notes: "" };
   }
 
@@ -1288,7 +1680,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=28").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();

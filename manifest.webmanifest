@@ -1,6 +1,7 @@
 {
   "name": "Crest",
   "short_name": "Crest",
+  "id": "./",
   "description": "Личный календарь целей и прогресса",
   "start_url": "./index.html",
   "display": "standalone",
