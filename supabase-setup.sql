@@ -12,6 +12,9 @@ create table if not exists public.progress_sync (
 
 alter table public.progress_sync enable row level security;
 revoke all on public.progress_sync from anon, authenticated;
+drop policy if exists deny_public_access on public.progress_sync;
+create policy deny_public_access on public.progress_sync
+  for all to anon, authenticated using (false) with check (false);
 
 create table if not exists public.push_subscriptions (
   id uuid primary key default gen_random_uuid(),
@@ -31,6 +34,11 @@ create table if not exists public.push_subscriptions (
 
 alter table public.push_subscriptions enable row level security;
 revoke all on public.push_subscriptions from anon, authenticated;
+create index if not exists push_subscriptions_sync_id_idx
+  on public.push_subscriptions (sync_id);
+drop policy if exists deny_public_access on public.push_subscriptions;
+create policy deny_public_access on public.push_subscriptions
+  for all to anon, authenticated using (false) with check (false);
 
 create table if not exists public.crest_server_secrets (
   name text primary key,
@@ -40,6 +48,9 @@ create table if not exists public.crest_server_secrets (
 
 alter table public.crest_server_secrets enable row level security;
 revoke all on public.crest_server_secrets from anon, authenticated;
+drop policy if exists deny_public_access on public.crest_server_secrets;
+create policy deny_public_access on public.crest_server_secrets
+  for all to anon, authenticated using (false) with check (false);
 
 -- VAPID and scheduler secrets are created directly in Supabase and are never
 -- committed to this repository. The crest-api Edge Function is the only public

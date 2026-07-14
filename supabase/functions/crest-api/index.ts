@@ -64,7 +64,6 @@ async function pushProgress(syncId: string, body: Record<string, unknown>, heade
   } else {
     ({ error } = await supabase.from("progress_sync").insert({
       sync_id: syncId,
-      sync_code: `legacy-${syncId}`,
       payload,
       revision,
       updated_at: updatedAt
