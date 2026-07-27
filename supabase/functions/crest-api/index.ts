@@ -300,6 +300,11 @@ function mergeProgress(server: Record<string, unknown>, incoming: Record<string,
     ? { ...restoredIncoming }
     : { ...restoredServer, ...restoredIncoming };
   merged.dayPlans = mergeUpdatedMap(restoredServer.dayPlans, restoredIncoming.dayPlans, revisionsMatch);
+  merged.calendarData = mergeCalendarData(
+    restoredServer.calendarData,
+    restoredIncoming.calendarData,
+    revisionsMatch
+  );
 
   const dateKeys = new Set([...Object.keys(restoredServer), ...Object.keys(restoredIncoming)].filter(isDateKey));
   for (const key of dateKeys) {
@@ -313,11 +318,14 @@ function mergeProgress(server: Record<string, unknown>, incoming: Record<string,
   chooseSection(merged, restoredServer, restoredIncoming, "profilePhoto", "profileUpdatedAt", revisionsMatch);
   chooseSection(merged, restoredServer, restoredIncoming, "profilePhotoVersion", "profileUpdatedAt", revisionsMatch);
   chooseSection(merged, restoredServer, restoredIncoming, "theme", "themeUpdatedAt", revisionsMatch);
+  chooseSection(merged, restoredServer, restoredIncoming, "calendars", "calendarsUpdatedAt", revisionsMatch);
+  chooseSection(merged, restoredServer, restoredIncoming, "taskTypes", "taskTypesUpdatedAt", revisionsMatch);
+  chooseSection(merged, restoredServer, restoredIncoming, "activeCalendarId", "activeCalendarUpdatedAt", revisionsMatch);
   for (const field of ["reminderMorning", "reminderEvening", "reminderTimezone"]) {
     chooseSection(merged, restoredServer, restoredIncoming, field, "reminderUpdatedAt", revisionsMatch);
   }
   delete merged.lockedDays;
-  merged.schemaVersion = Math.max(Number(merged.schemaVersion) || 0, 31);
+  merged.schemaVersion = Math.max(Number(merged.schemaVersion) || 0, 32);
   return merged;
 }
 
@@ -349,8 +357,35 @@ function restoreLegacyLockedDays(value: Record<string, unknown>) {
   }
 
   payload.dayPlans = dayPlans;
-  payload.schemaVersion = Math.max(Number(payload.schemaVersion) || 0, 31);
+  payload.schemaVersion = Math.max(Number(payload.schemaVersion) || 0, 32);
   return { payload, changed: true };
+}
+
+function mergeCalendarData(serverValue: unknown, incomingValue: unknown, revisionsMatch: boolean) {
+  const server = isObject(serverValue) ? serverValue : {};
+  const incoming = isObject(incomingValue) ? incomingValue : {};
+  if (revisionsMatch) return { ...incoming };
+  const result: Record<string, unknown> = {};
+  for (const calendarId of new Set([...Object.keys(server), ...Object.keys(incoming)])) {
+    const left = isObject(server[calendarId]) ? server[calendarId] : {};
+    const right = isObject(incoming[calendarId]) ? incoming[calendarId] : {};
+    if (!(calendarId in server)) {
+      result[calendarId] = right;
+      continue;
+    }
+    if (!(calendarId in incoming)) {
+      result[calendarId] = left;
+      continue;
+    }
+    const mergedStore: Record<string, unknown> = { ...left, ...right };
+    mergedStore.dayPlans = mergeUpdatedMap(left.dayPlans, right.dayPlans, false);
+    mergedStore.entries = mergeUpdatedMap(left.entries, right.entries, false);
+    const leftTime = Date.parse(String(left.updatedAt || "")) || 0;
+    const rightTime = Date.parse(String(right.updatedAt || "")) || 0;
+    mergedStore.updatedAt = rightTime >= leftTime ? right.updatedAt : left.updatedAt;
+    result[calendarId] = mergedStore;
+  }
+  return result;
 }
 
 function mergeUpdatedMap(serverValue: unknown, incomingValue: unknown, revisionsMatch: boolean) {

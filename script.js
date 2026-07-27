@@ -10,6 +10,8 @@
   const cloudFunctionUrl = "https://bclhwefsswxtqtwzppik.supabase.co/functions/v1/crest-api";
   const cloudPublishableKey = "sb_publishable_CDziEC3GM9o0di7zIqw9vw_PgeCT9oJ";
   const vapidPublicKey = "BA1j44cNJV6QoirknYZOiFPQaLiygwxyVmRbaFCcIm3V5lFmTeM-S1SgctoZXNNR5makhB7ip44OcXjDXNMeRQc";
+  const localPreview = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+    && new URLSearchParams(window.location.search).has("preview");
   const authClient = window.supabase.createClient(supabaseUrl, cloudPublishableKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
@@ -37,8 +39,18 @@
   let dateWatchTimer = null;
   let notesCloudSaveTimer = null;
   let isNotesComposing = false;
+  let activeProfilePage = "overview";
+  let editingCalendarId = null;
+  let selectedCalendarIcon = "calendar";
+  let selectedCalendarColor = "#286fb4";
 
   const calendarGrid = document.querySelector("#calendarGrid");
+  const calendarTabs = document.querySelector("#calendarTabs");
+  const addCalendarButton = document.querySelector("#addCalendarButton");
+  const settingsAddCalendarButton = document.querySelector("#settingsAddCalendarButton");
+  const activeCalendarIcon = document.querySelector("#activeCalendarIcon");
+  const activeCalendarLabel = document.querySelector("#activeCalendarLabel");
+  const activeCalendarTitle = document.querySelector("#activeCalendarTitle");
   const monthTitle = document.querySelector("#monthTitle");
   const previousMonthButton = document.querySelector("#previousMonth");
   const nextMonthButton = document.querySelector("#nextMonth");
@@ -61,6 +73,8 @@
   const avatarFallback = document.querySelector("#avatarFallback");
   const selectedWeekday = document.querySelector("#selectedWeekday");
   const selectedDate = document.querySelector("#selectedDate");
+  const selectedDayNumber = document.querySelector("#selectedDayNumber");
+  const selectedCalendarName = document.querySelector("#selectedCalendarName");
   const loadPill = document.querySelector("#loadPill");
   const dayFocus = document.querySelector("#dayFocus");
   const taskList = document.querySelector("#taskList");
@@ -74,6 +88,10 @@
   const taskTitleInput = document.querySelector("#taskTitleInput");
   const taskMetaInput = document.querySelector("#taskMetaInput");
   const taskTypeInput = document.querySelector("#taskTypeInput");
+  const addTaskTypeButton = document.querySelector("#addTaskTypeButton");
+  const newTaskTypeEditor = document.querySelector("#newTaskTypeEditor");
+  const newTaskTypeName = document.querySelector("#newTaskTypeName");
+  const saveTaskTypeButton = document.querySelector("#saveTaskTypeButton");
   const saveTaskButton = document.querySelector("#saveTaskButton");
   const deleteTaskButton = document.querySelector("#deleteTaskButton");
   const energyRange = document.querySelector("#energyRange");
@@ -86,6 +104,11 @@
   const topStreakScore = document.querySelector("#topStreakScore");
   const streakFlame = document.querySelector("#streakFlame");
   const goalBand = document.querySelector("#goalBand");
+  const profileCalendarSummary = document.querySelector("#profileCalendarSummary");
+  const calendarSettingsList = document.querySelector("#calendarSettingsList");
+  const taskTypeSettingsList = document.querySelector("#taskTypeSettingsList");
+  const profileTabs = document.querySelectorAll("[data-profile-tab]");
+  const profilePages = document.querySelectorAll("[data-profile-page]");
   const newGoalKicker = document.querySelector("#newGoalKicker");
   const newGoalTitle = document.querySelector("#newGoalTitle");
   const addGoalButton = document.querySelector("#addGoalButton");
@@ -116,26 +139,46 @@
   const registerPassword = document.querySelector("#registerPassword");
   const registerPasswordConfirm = document.querySelector("#registerPasswordConfirm");
   const authStatus = document.querySelector("#authStatus");
+  const calendarEditorModal = document.querySelector("#calendarEditorModal");
+  const calendarEditorBackdrop = document.querySelector("#calendarEditorBackdrop");
+  const closeCalendarEditorButton = document.querySelector("#closeCalendarEditor");
+  const calendarEditorTitle = document.querySelector("#calendarEditorTitle");
+  const calendarNameInput = document.querySelector("#calendarNameInput");
+  const calendarIconOptions = document.querySelector("#calendarIconOptions");
+  const calendarColorOptions = document.querySelector("#calendarColorOptions");
+  const saveCalendarButton = document.querySelector("#saveCalendarButton");
+  const deleteCalendarButton = document.querySelector("#deleteCalendarButton");
 
   applyTheme(state.theme || "light");
+  renderCalendarNavigation();
   renderCalendar();
   renderStats();
   renderGoals();
+  renderCalendarSettings();
+  renderTaskTypeSettings();
   renderProfilePhoto();
   renderAccount();
   renderReminderSettings();
   normalizeStoredProfilePhoto();
   startDateWatcher();
   openRequestedDay();
-  initializeAuth();
+  if (localPreview) {
+    authScreen.hidden = true;
+    document.body.classList.add("is-authenticated");
+  } else {
+    initializeAuth();
+  }
   if ("clearAppBadge" in navigator) navigator.clearAppBadge().catch(() => {});
 
   profileButton.addEventListener("click", openProfile);
+  addCalendarButton.addEventListener("click", () => openCalendarEditor());
+  settingsAddCalendarButton.addEventListener("click", () => openCalendarEditor());
   previousMonthButton.addEventListener("click", () => changeMonth(-1));
   nextMonthButton.addEventListener("click", () => changeMonth(1));
   todayButton.addEventListener("click", goToToday);
   calendarGrid.addEventListener("touchstart", handleCalendarTouchStart, { passive: true });
   calendarGrid.addEventListener("touchend", handleCalendarTouchEnd, { passive: true });
+  window.addEventListener("resize", () => requestAnimationFrame(() => centerActiveCalendarTab("auto")));
   avatarButton.addEventListener("click", () => photoInput.click());
   changePhotoButton.addEventListener("click", () => photoInput.click());
   fitPhotoButton.addEventListener("click", fitCurrentPhoto);
@@ -152,6 +195,11 @@
   closeTaskEditorButton.addEventListener("click", closeTaskEditor);
   saveTaskButton.addEventListener("click", saveTaskFromEditor);
   deleteTaskButton.addEventListener("click", deleteTaskFromEditor);
+  addTaskTypeButton.addEventListener("click", showNewTaskTypeEditor);
+  saveTaskTypeButton.addEventListener("click", saveNewTaskType);
+  newTaskTypeName.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") saveNewTaskType();
+  });
   addGoalButton.addEventListener("click", addGoal);
   saveProfileNameButton.addEventListener("click", saveProfileName);
   syncNowButton.addEventListener("click", () => pullCloudState({ pushIfEmpty: true }));
@@ -165,12 +213,25 @@
   eveningTimeInput.addEventListener("change", saveReminderSettings);
   refreshTimezoneButton.addEventListener("click", refreshReminderTimezone);
   testNotificationButton.addEventListener("click", sendTestNotification);
+  closeCalendarEditorButton.addEventListener("click", closeCalendarEditor);
+  calendarEditorBackdrop.addEventListener("click", closeCalendarEditor);
+  saveCalendarButton.addEventListener("click", saveCalendarFromEditor);
+  deleteCalendarButton.addEventListener("click", deleteCalendarFromEditor);
+  calendarIconOptions.addEventListener("click", handleCalendarIconChoice);
+  calendarColorOptions.addEventListener("click", handleCalendarColorChoice);
+  profileTabs.forEach((button) => {
+    button.addEventListener("click", () => showProfilePage(button.dataset.profileTab));
+  });
   themeChoices.forEach((button) => {
     button.addEventListener("click", () => applyTheme(button.dataset.themeChoice, { save: true }));
   });
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
+    if (calendarEditorModal.classList.contains("is-open")) {
+      closeCalendarEditor();
+      return;
+    }
     if (taskModal.classList.contains("is-open")) {
       closeTaskEditor();
       return;
@@ -611,12 +672,65 @@
     return { title: pool[index][0], meta: pool[index][1] };
   }
 
-  function effectiveDay(day) {
-    return editableDay(day);
+  function defaultCalendars() {
+    return [
+      {
+        id: "tasks",
+        name: "Дела",
+        icon: "list",
+        color: "#286fb4",
+        description: "Задачи и проекты",
+        system: true
+      },
+      {
+        id: "habits",
+        name: "Привычки",
+        icon: "repeat",
+        color: "#2f7d5a",
+        description: "Полезные привычки",
+        system: true
+      },
+      {
+        id: "sport",
+        name: "Спорт",
+        icon: "sport",
+        color: "#b76032",
+        description: "Тренировки и форма",
+        system: true
+      }
+    ];
   }
 
-  function editableDay(day) {
-    const custom = state.dayPlans && state.dayPlans[day.key];
+  function calendars() {
+    if (!Array.isArray(state.calendars) || !state.calendars.length) {
+      state.calendars = defaultCalendars();
+    }
+    return state.calendars;
+  }
+
+  function calendarById(id) {
+    return calendars().find((calendar) => calendar.id === id) || calendars()[0];
+  }
+
+  function activeCalendar() {
+    const calendar = calendarById(state.activeCalendarId);
+    if (state.activeCalendarId !== calendar.id) state.activeCalendarId = calendar.id;
+    return calendar;
+  }
+
+  function calendarStore(calendarId = activeCalendar().id) {
+    state.calendarData = state.calendarData && typeof state.calendarData === "object" ? state.calendarData : {};
+    if (!state.calendarData[calendarId] || typeof state.calendarData[calendarId] !== "object") {
+      state.calendarData[calendarId] = { dayPlans: {}, entries: {}, updatedAt: new Date().toISOString() };
+    }
+    const store = state.calendarData[calendarId];
+    store.dayPlans = store.dayPlans && typeof store.dayPlans === "object" ? store.dayPlans : {};
+    store.entries = store.entries && typeof store.entries === "object" ? store.entries : {};
+    return store;
+  }
+
+  function effectiveDay(day) {
+    const custom = calendarStore().dayPlans[day.key];
     if (!custom) return day;
     return {
       ...day,
@@ -625,37 +739,79 @@
     };
   }
 
-  function dayForDate(date) {
+  function dayForDate(date, calendarId = activeCalendar().id) {
     const key = formatKey(date);
-    const planned = plannedDays.find((item) => item.key === key);
-    if (planned) return planned;
-    return {
-      key,
-      date: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
-      focus: "Без фокуса",
-      tasks: []
-    };
+    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const starterEnabled = state.useStarterTemplate !== false;
+    const inStarterRange = normalizedDate >= planStartDate && normalizedDate <= planEndDate;
+    const sourceDay = inStarterRange
+      ? (plannedDays.find((item) => item.key === key) || buildDay(normalizedDate))
+      : null;
+    let focus = "Без фокуса";
+    let tasks = [];
+
+    if (calendarId === "tasks" && sourceDay) {
+      focus = sourceDay.focus;
+      tasks = sourceDay.tasks.filter((task) => !["habit", "sport"].includes(task.type));
+    } else if (calendarId === "habits" && starterEnabled) {
+      focus = "Ритм и забота о себе";
+      tasks = [
+        {
+          id: "cold",
+          title: "Холодный душ",
+          meta: "2-4 минуты. Главное - отметить выполнение, без насилия над собой.",
+          type: "habit"
+        },
+        {
+          id: "english",
+          title: "Английский",
+          meta: "15 минут: слова, listening или короткий текст.",
+          type: "habit"
+        }
+      ];
+      if (normalizedDate.getDay() === 0) {
+        tasks.push({
+          id: "review",
+          title: "Недельный обзор",
+          meta: "20 минут: что работает, что перегружает, что переносим.",
+          type: "habit"
+        });
+      }
+    } else if (calendarId === "sport" && starterEnabled) {
+      focus = "Тренировка и восстановление";
+      if ([1, 3, 6].includes(normalizedDate.getDay())) {
+        tasks = [{
+          id: "sport",
+          title: "Спорт",
+          meta: "45-60 минут: база, техника, растяжка в конце.",
+          type: "sport"
+        }];
+      }
+    }
+
+    return { key, date: normalizedDate, focus, tasks: cloneTasks(tasks) };
   }
 
-  function dayForKey(key) {
+  function dayForKey(key, calendarId = activeCalendar().id) {
     const parts = key.split("-").map(Number);
     if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) {
-      return dayForDate(today);
+      return dayForDate(today, calendarId);
     }
-    return dayForDate(new Date(parts[0], parts[1] - 1, parts[2]));
+    return dayForDate(new Date(parts[0], parts[1] - 1, parts[2]), calendarId);
   }
 
   function ensureDayPlan(key) {
     const day = dayForKey(key);
-    state.dayPlans = state.dayPlans || {};
-    if (!state.dayPlans[key]) {
-      state.dayPlans[key] = {
+    const store = calendarStore();
+    if (!store.dayPlans[key]) {
+      store.dayPlans[key] = {
         focus: day.focus,
         tasks: cloneTasks(day.tasks),
         updatedAt: new Date().toISOString()
       };
+      store.updatedAt = new Date().toISOString();
     }
-    return state.dayPlans[key];
+    return store.dayPlans[key];
   }
 
   function cloneTasks(tasks) {
@@ -675,7 +831,7 @@
       const snapshot = lockedDays[key];
       if (!isDateKey(key) || !snapshot || typeof snapshot !== "object") return;
       const restoredAt = typeof snapshot.lockedAt === "string" ? snapshot.lockedAt : migrationTime;
-      const baseDay = dayForKey(key);
+      const baseDay = legacyDayForKey(key);
       const existingPlan = state.dayPlans[key] && typeof state.dayPlans[key] === "object"
         ? state.dayPlans[key]
         : {};
@@ -703,29 +859,188 @@
 
   function migrateState() {
     const fallbackUpdatedAt = state.localUpdatedAt || new Date().toISOString();
-    state.schemaVersion = 31;
     state.profileName = String(state.profileName || "").trim().slice(0, 40);
     if (typeof state.useStarterTemplate !== "boolean") state.useStarterTemplate = true;
     state.dayPlans = state.dayPlans && typeof state.dayPlans === "object" ? state.dayPlans : {};
     restoreLegacyLockedDays();
+    migrateLegacyCalendarData(fallbackUpdatedAt);
+    state.schemaVersion = 32;
+    state.calendars = normalizeCalendars(state.calendars);
+    state.activeCalendarId = calendarById(state.activeCalendarId || "tasks").id;
+    state.taskTypes = normalizeTaskTypes(state.taskTypes);
     state.reminderMorning = validTime(state.reminderMorning) ? state.reminderMorning : "10:00";
     state.reminderEvening = validTime(state.reminderEvening) ? state.reminderEvening : "16:00";
     state.reminderTimezone = state.reminderTimezone || detectedTimezone();
     state.remindersEnabled = Boolean(state.remindersEnabled);
     state.cloudRevision = Number(state.cloudRevision) || 0;
 
-    Object.values(state.dayPlans).forEach((plan) => {
-      if (plan && !plan.updatedAt) plan.updatedAt = fallbackUpdatedAt;
-    });
-
-    Object.keys(state).forEach((key) => {
-      if (!isDateKey(key) || !state[key] || typeof state[key] !== "object") return;
-      if (!state[key].updatedAt) state[key].updatedAt = fallbackUpdatedAt;
+    calendars().forEach((calendar) => {
+      const store = calendarStore(calendar.id);
+      if (!store.updatedAt) store.updatedAt = fallbackUpdatedAt;
+      Object.values(store.dayPlans).forEach((plan) => {
+        if (plan && !plan.updatedAt) plan.updatedAt = fallbackUpdatedAt;
+      });
+      Object.values(store.entries).forEach((entry) => {
+        if (entry && !entry.updatedAt) entry.updatedAt = fallbackUpdatedAt;
+      });
     });
 
     delete state.syncUrl;
     delete state.syncKey;
     localStorage.setItem(storageKey, JSON.stringify(state));
+  }
+
+  function migrateLegacyCalendarData(fallbackUpdatedAt) {
+    if (state.calendarData && typeof state.calendarData === "object") {
+      delete state.dayPlans;
+      Object.keys(state).filter(isDateKey).forEach((key) => delete state[key]);
+      return;
+    }
+
+    const sourcePlans = state.dayPlans && typeof state.dayPlans === "object" ? state.dayPlans : {};
+    const sourceEntries = {};
+    Object.keys(state).filter(isDateKey).forEach((key) => {
+      if (state[key] && typeof state[key] === "object") sourceEntries[key] = state[key];
+    });
+    const stores = {
+      tasks: { dayPlans: {}, entries: {}, updatedAt: fallbackUpdatedAt },
+      habits: { dayPlans: {}, entries: {}, updatedAt: fallbackUpdatedAt },
+      sport: { dayPlans: {}, entries: {}, updatedAt: fallbackUpdatedAt }
+    };
+    const keys = new Set([
+      ...plannedDays.map((day) => day.key),
+      ...Object.keys(sourcePlans),
+      ...Object.keys(sourceEntries)
+    ]);
+
+    keys.forEach((key) => {
+      if (!isDateKey(key)) return;
+      const baseDay = legacyDayForKey(key);
+      const custom = sourcePlans[key] && typeof sourcePlans[key] === "object" ? sourcePlans[key] : {};
+      const allTasks = Array.isArray(custom.tasks) ? cloneTasks(custom.tasks) : cloneTasks(baseDay.tasks);
+      const sourceEntry = sourceEntries[key] && typeof sourceEntries[key] === "object"
+        ? sourceEntries[key]
+        : { tasks: {}, energy: 5, notes: "", updatedAt: fallbackUpdatedAt };
+      const groups = {
+        tasks: allTasks.filter((task) => !["habit", "sport"].includes(task.type)),
+        habits: allTasks.filter((task) => task.type === "habit"),
+        sport: allTasks.filter((task) => task.type === "sport")
+      };
+
+      Object.entries(groups).forEach(([calendarId, tasks]) => {
+        stores[calendarId].dayPlans[key] = {
+          focus: calendarId === "tasks"
+            ? (custom.focus || baseDay.focus)
+            : (calendarId === "habits" ? "Ритм и забота о себе" : "Тренировка и восстановление"),
+          tasks: cloneTasks(tasks),
+          updatedAt: custom.updatedAt || fallbackUpdatedAt
+        };
+        const taskIds = new Set(tasks.map((task) => task.id));
+        const completed = {};
+        Object.entries(sourceEntry.tasks || {}).forEach(([taskId, done]) => {
+          if (taskIds.has(taskId)) completed[taskId] = Boolean(done);
+        });
+        stores[calendarId].entries[key] = {
+          tasks: completed,
+          energy: calendarId === "tasks" ? Number(sourceEntry.energy) || 5 : 5,
+          notes: calendarId === "tasks" ? String(sourceEntry.notes || "") : "",
+          updatedAt: sourceEntry.updatedAt || fallbackUpdatedAt
+        };
+      });
+    });
+
+    state.calendarData = stores;
+    state.calendars = defaultCalendars();
+    state.activeCalendarId = "tasks";
+    state.calendarsUpdatedAt = fallbackUpdatedAt;
+    delete state.dayPlans;
+    Object.keys(state).filter(isDateKey).forEach((key) => delete state[key]);
+  }
+
+  function legacyDayForKey(key) {
+    const planned = plannedDays.find((item) => item.key === key);
+    if (planned) return planned;
+    const parts = key.split("-").map(Number);
+    const date = parts.length === 3 && parts.every(Number.isFinite)
+      ? new Date(parts[0], parts[1] - 1, parts[2])
+      : new Date(today);
+    return { key: formatKey(date), date, focus: "Без фокуса", tasks: [] };
+  }
+
+  function normalizeCalendars(value) {
+    const source = Array.isArray(value) ? value : defaultCalendars();
+    const seen = new Set();
+    const result = source
+      .filter((calendar) => calendar && typeof calendar === "object")
+      .map((calendar) => ({
+        id: String(calendar.id || `calendar-${Date.now()}-${Math.random().toString(16).slice(2)}`),
+        name: String(calendar.name || "Календарь").trim().slice(0, 24) || "Календарь",
+        icon: calendarIconNames().includes(calendar.icon) ? calendar.icon : "calendar",
+        color: validCalendarColor(calendar.color) ? calendar.color : "#286fb4",
+        description: String(calendar.description || "Личный календарь").trim().slice(0, 48),
+        system: Boolean(calendar.system)
+      }))
+      .filter((calendar) => {
+        if (seen.has(calendar.id)) return false;
+        seen.add(calendar.id);
+        return true;
+      });
+    const defaults = defaultCalendars();
+    const defaultIds = new Set(defaults.map((calendar) => calendar.id));
+    const normalizedDefaults = defaults.map((calendar) => {
+      const existing = result.find((item) => item.id === calendar.id);
+      return existing ? { ...existing, system: true } : calendar;
+    });
+    return [
+      ...normalizedDefaults,
+      ...result.filter((calendar) => !defaultIds.has(calendar.id))
+    ];
+  }
+
+  function defaultTaskTypes() {
+    return [
+      { id: "habit", name: "Привычка", color: "#2f7d5a", system: true },
+      { id: "work", name: "Работа", color: "#286fb4", system: true },
+      { id: "sport", name: "Спорт", color: "#b76032", system: true },
+      { id: "personal", name: "Личное", color: "#7b61a8", system: true }
+    ];
+  }
+
+  function normalizeTaskTypes(value) {
+    const source = Array.isArray(value) ? value : defaultTaskTypes();
+    const seen = new Set();
+    const result = source
+      .filter((type) => type && typeof type === "object")
+      .map((type) => ({
+        id: String(type.id || `type-${Date.now()}-${Math.random().toString(16).slice(2)}`),
+        name: String(type.name || "Другое").trim().slice(0, 24) || "Другое",
+        color: validCalendarColor(type.color) ? type.color : "#4d6b78",
+        system: Boolean(type.system)
+      }))
+      .filter((type) => {
+        if (seen.has(type.id)) return false;
+        seen.add(type.id);
+        return true;
+      });
+    const defaults = defaultTaskTypes();
+    const defaultIds = new Set(defaults.map((type) => type.id));
+    const normalizedDefaults = defaults.map((type) => {
+      const existing = result.find((item) => item.id === type.id);
+      return existing ? { ...existing, system: true } : type;
+    });
+    return [
+      ...normalizedDefaults,
+      ...result.filter((type) => !defaultIds.has(type.id))
+    ];
+  }
+
+  function taskTypes() {
+    state.taskTypes = normalizeTaskTypes(state.taskTypes);
+    return state.taskTypes;
+  }
+
+  function validCalendarColor(value) {
+    return /^#[0-9a-f]{6}$/i.test(String(value || ""));
   }
 
   function detectedTimezone() {
@@ -807,6 +1122,248 @@
       state.goals = state.useStarterTemplate === false ? [] : defaultGoals();
     }
     return state.goals;
+  }
+
+  function calendarIconNames() {
+    return ["list", "repeat", "sport", "study", "target", "calendar"];
+  }
+
+  function calendarIconSvg(name) {
+    const paths = {
+      list: '<path d="M9 6h11M9 12h11M9 18h11"></path><path d="M4 6h.01M4 12h.01M4 18h.01"></path>',
+      repeat: '<path d="m17 2 4 4-4 4"></path><path d="M3 11V9a3 3 0 0 1 3-3h15"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v2a3 3 0 0 1-3 3H3"></path>',
+      sport: '<path d="M6.5 6.5h11v11h-11z"></path><path d="M2 9v6M22 9v6M4 7v10M20 7v10"></path>',
+      study: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>',
+      target: '<circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1"></circle>',
+      calendar: '<path d="M8 2v4M16 2v4M3 9h18"></path><rect x="3" y="4" width="18" height="17" rx="2"></rect>'
+    };
+    return `<svg aria-hidden="true" viewBox="0 0 24 24">${paths[name] || paths.calendar}</svg>`;
+  }
+
+  function renderCalendarNavigation() {
+    const current = activeCalendar();
+    calendarTabs.innerHTML = "";
+    calendars().forEach((calendar) => {
+      const button = document.createElement("button");
+      const active = calendar.id === current.id;
+      button.type = "button";
+      button.className = `calendar-tab ${active ? "is-active" : ""}`;
+      button.style.setProperty("--calendar-color", calendar.color);
+      button.setAttribute("aria-pressed", String(active));
+      button.setAttribute("aria-label", `Открыть календарь ${calendar.name}`);
+      button.innerHTML = `${calendarIconSvg(calendar.icon)}<span>${escapeHtml(calendar.name)}</span>`;
+      button.addEventListener("click", () => switchCalendar(calendar.id));
+      calendarTabs.appendChild(button);
+    });
+
+    activeCalendarIcon.innerHTML = calendarIconSvg(current.icon);
+    activeCalendarIcon.style.setProperty("--calendar-color", current.color);
+    activeCalendarTitle.textContent = current.name;
+    activeCalendarLabel.textContent = current.description || "Личный календарь";
+    document.documentElement.style.setProperty("--calendar-accent", current.color);
+    renderProfileCalendarSummary();
+
+    requestAnimationFrame(() => centerActiveCalendarTab("smooth"));
+  }
+
+  function centerActiveCalendarTab(behavior = "smooth") {
+    const activeButton = calendarTabs.querySelector(".calendar-tab.is-active");
+    if (!activeButton || calendarTabs.scrollWidth <= calendarTabs.clientWidth) return;
+    const centeredLeft = activeButton.offsetLeft - (calendarTabs.clientWidth - activeButton.offsetWidth) / 2;
+    calendarTabs.scrollTo({ left: Math.max(0, centeredLeft), behavior });
+  }
+
+  function switchCalendar(calendarId) {
+    if (!calendars().some((calendar) => calendar.id === calendarId)) return;
+    state.activeCalendarId = calendarId;
+    state.activeCalendarUpdatedAt = new Date().toISOString();
+    saveState();
+    renderCalendarNavigation();
+    renderCalendar();
+    renderStats();
+    if (activeModal === "day") renderDay();
+  }
+
+  function renderProfileCalendarSummary() {
+    if (!profileCalendarSummary) return;
+    profileCalendarSummary.innerHTML = "";
+    calendars().forEach((calendar) => {
+      const day = effectiveDayForCalendar(dayForDate(today, calendar.id), calendar.id);
+      const entry = readEntryForCalendar(day.key, calendar.id);
+      const done = day.tasks.filter((task) => entry.tasks[task.id]).length;
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "profile-calendar-row";
+      row.style.setProperty("--calendar-color", calendar.color);
+      row.innerHTML = `
+        <span class="profile-calendar-row-icon">${calendarIconSvg(calendar.icon)}</span>
+        <span><strong>${escapeHtml(calendar.name)}</strong><small>${done} из ${day.tasks.length} сегодня</small></span>
+        <span class="profile-calendar-row-count">${day.tasks.length - done}</span>
+      `;
+      row.addEventListener("click", () => {
+        switchCalendar(calendar.id);
+        closeProfileModal();
+      });
+      profileCalendarSummary.appendChild(row);
+    });
+  }
+
+  function effectiveDayForCalendar(day, calendarId) {
+    const custom = calendarStore(calendarId).dayPlans[day.key];
+    if (!custom) return day;
+    return {
+      ...day,
+      focus: custom.focus || day.focus,
+      tasks: Array.isArray(custom.tasks) ? custom.tasks : day.tasks
+    };
+  }
+
+  function showProfilePage(pageName) {
+    activeProfilePage = ["overview", "goals", "reminders", "settings"].includes(pageName)
+      ? pageName
+      : "overview";
+    profileTabs.forEach((button) => {
+      const active = button.dataset.profileTab === activeProfilePage;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-selected", String(active));
+    });
+    profilePages.forEach((page) => {
+      const active = page.dataset.profilePage === activeProfilePage;
+      page.classList.toggle("is-active", active);
+      page.hidden = !active;
+    });
+    if (activeProfilePage === "settings") {
+      renderCalendarSettings();
+      renderTaskTypeSettings();
+    }
+  }
+
+  function renderCalendarSettings() {
+    if (!calendarSettingsList) return;
+    calendarSettingsList.innerHTML = "";
+    calendars().forEach((calendar) => {
+      const row = document.createElement("div");
+      row.className = "calendar-settings-row";
+      row.style.setProperty("--calendar-color", calendar.color);
+      row.innerHTML = `
+        <span class="calendar-settings-icon">${calendarIconSvg(calendar.icon)}</span>
+        <span class="calendar-settings-copy">
+          <strong>${escapeHtml(calendar.name)}</strong>
+          <small>${calendar.system ? "Основной календарь" : "Пользовательский календарь"}</small>
+        </span>
+        <button class="icon-button calendar-edit-button" type="button" aria-label="Изменить календарь ${escapeAttribute(calendar.name)}" title="Изменить">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"></path></svg>
+        </button>
+      `;
+      row.querySelector(".calendar-edit-button").addEventListener("click", () => openCalendarEditor(calendar.id));
+      calendarSettingsList.appendChild(row);
+    });
+  }
+
+  function openCalendarEditor(calendarId = null) {
+    const calendar = calendarId ? calendarById(calendarId) : null;
+    editingCalendarId = calendar ? calendar.id : null;
+    selectedCalendarIcon = calendar?.icon || "calendar";
+    selectedCalendarColor = calendar?.color || "#286fb4";
+    calendarEditorTitle.textContent = calendar ? "Настроить календарь" : "Новый календарь";
+    calendarNameInput.value = calendar?.name || "";
+    saveCalendarButton.textContent = calendar ? "Сохранить" : "Создать календарь";
+    deleteCalendarButton.hidden = !calendar || calendar.system;
+    calendarIconOptions.querySelectorAll("[data-calendar-icon]").forEach((button) => {
+      button.innerHTML = calendarIconSvg(button.dataset.calendarIcon);
+      button.classList.toggle("is-selected", button.dataset.calendarIcon === selectedCalendarIcon);
+    });
+    calendarColorOptions.querySelectorAll("[data-calendar-color]").forEach((button) => {
+      button.classList.toggle("is-selected", button.dataset.calendarColor === selectedCalendarColor);
+    });
+    calendarEditorModal.classList.add("is-open");
+    calendarEditorModal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+    requestAnimationFrame(() => calendarNameInput.focus());
+  }
+
+  function closeCalendarEditor() {
+    calendarEditorModal.classList.remove("is-open");
+    calendarEditorModal.setAttribute("aria-hidden", "true");
+    editingCalendarId = null;
+    if (!dayModal.classList.contains("is-open") && !profileModal.classList.contains("is-open")) {
+      document.body.classList.remove("modal-open");
+    }
+  }
+
+  function handleCalendarIconChoice(event) {
+    const button = event.target.closest("[data-calendar-icon]");
+    if (!button) return;
+    selectedCalendarIcon = button.dataset.calendarIcon;
+    calendarIconOptions.querySelectorAll("[data-calendar-icon]").forEach((item) => {
+      item.classList.toggle("is-selected", item === button);
+    });
+  }
+
+  function handleCalendarColorChoice(event) {
+    const button = event.target.closest("[data-calendar-color]");
+    if (!button) return;
+    selectedCalendarColor = button.dataset.calendarColor;
+    calendarColorOptions.querySelectorAll("[data-calendar-color]").forEach((item) => {
+      item.classList.toggle("is-selected", item === button);
+    });
+  }
+
+  function saveCalendarFromEditor() {
+    const name = calendarNameInput.value.trim().slice(0, 24);
+    if (!name) {
+      calendarNameInput.focus();
+      return;
+    }
+    const timestamp = new Date().toISOString();
+    if (editingCalendarId) {
+      const calendar = calendars().find((item) => item.id === editingCalendarId);
+      if (!calendar) return;
+      calendar.name = name;
+      calendar.icon = selectedCalendarIcon;
+      calendar.color = selectedCalendarColor;
+      calendar.description = calendar.system ? calendar.description : "Личный календарь";
+    } else {
+      const id = `calendar-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      state.calendars.push({
+        id,
+        name,
+        icon: selectedCalendarIcon,
+        color: selectedCalendarColor,
+        description: "Личный календарь",
+        system: false
+      });
+      state.calendarData[id] = { dayPlans: {}, entries: {}, updatedAt: timestamp };
+      state.activeCalendarId = id;
+      state.activeCalendarUpdatedAt = timestamp;
+    }
+    state.calendarsUpdatedAt = timestamp;
+    saveState();
+    closeCalendarEditor();
+    renderCalendarNavigation();
+    renderCalendarSettings();
+    renderCalendar();
+    renderStats();
+  }
+
+  function deleteCalendarFromEditor() {
+    const calendar = calendars().find((item) => item.id === editingCalendarId);
+    if (!calendar || calendar.system) return;
+    if (!window.confirm(`Удалить календарь «${calendar.name}» и все его записи?`)) return;
+    state.calendars = calendars().filter((item) => item.id !== calendar.id);
+    delete state.calendarData[calendar.id];
+    const timestamp = new Date().toISOString();
+    if (state.activeCalendarId === calendar.id) {
+      state.activeCalendarId = "tasks";
+      state.activeCalendarUpdatedAt = timestamp;
+    }
+    state.calendarsUpdatedAt = timestamp;
+    saveState();
+    closeCalendarEditor();
+    renderCalendarNavigation();
+    renderCalendarSettings();
+    renderCalendar();
+    renderStats();
   }
 
   function renderCalendar() {
@@ -907,8 +1464,11 @@
 
   function openProfile() {
     activeModal = "profile";
+    showProfilePage("overview");
     renderStats();
     renderGoals();
+    renderCalendarSettings();
+    renderTaskTypeSettings();
     renderProfilePhoto();
     renderAccount();
     profileModal.classList.add("is-open");
@@ -1187,7 +1747,9 @@
     const entry = ensureEntry(sourceDay.key);
     const status = dayStatus(day, entry);
     selectedWeekday.textContent = weekdayNames[sourceDay.date.getDay()];
-    selectedDate.textContent = formatDate(sourceDay.date);
+    selectedDayNumber.textContent = sourceDay.date.getDate();
+    selectedDate.textContent = `${monthNames[sourceDay.date.getMonth()]} ${sourceDay.date.getFullYear()}`;
+    selectedCalendarName.textContent = activeCalendar().name;
     loadPill.textContent = status.label;
     loadPill.className = `load-pill ${status.kind}`;
     dayFocus.textContent = day.focus;
@@ -1196,7 +1758,7 @@
     dayFocus.contentEditable = isEditingDay ? "true" : "false";
     dayFocus.classList.toggle("is-editable", isEditingDay);
     dayFocus.setAttribute("aria-label", isEditingDay ? "Изменить фокус дня" : "Фокус дня");
-    addTaskButton.hidden = !isEditingDay;
+    addTaskButton.hidden = false;
     energyRange.value = entry.energy;
     energyRange.disabled = false;
     energyValue.textContent = entry.energy;
@@ -1209,11 +1771,16 @@
     day.tasks.forEach((task) => {
       const row = document.createElement("div");
       const done = Boolean(entry.tasks[task.id]);
+      const type = taskTypeById(task.type);
       row.className = `task-row ${done ? "done" : ""} ${isEditingDay ? "is-editable" : ""}`;
+      row.style.setProperty("--task-type-color", type.color);
       row.innerHTML = `
         <button class="check-button" type="button" aria-label="Отметить задачу" ${isEditingDay ? "disabled" : ""}>${done ? "✓" : ""}</button>
         <button class="task-content-button" type="button" ${isEditingDay ? "" : "disabled"} aria-label="Изменить задачу ${escapeAttribute(task.title)}">
-          <span class="task-title">${escapeHtml(task.title)}</span>
+          <span class="task-title-line">
+            <span class="task-title">${escapeHtml(task.title)}</span>
+            <span class="task-type-badge">${escapeHtml(type.name)}</span>
+          </span>
           <span class="task-meta">${escapeHtml(task.meta)}</span>
         </button>
       `;
@@ -1261,7 +1828,8 @@
     taskEditorTitle.textContent = "Изменить задачу";
     taskTitleInput.value = task.title;
     taskMetaInput.value = task.meta || "";
-    taskTypeInput.value = task.type || "habit";
+    renderTaskTypeOptions(task.type || defaultTaskTypeForCalendar());
+    newTaskTypeEditor.hidden = true;
     saveTaskButton.textContent = "Сохранить изменения";
     deleteTaskButton.hidden = false;
     showTaskEditor();
@@ -1273,7 +1841,9 @@
     taskEditorTitle.textContent = "Добавить задачу";
     taskTitleInput.value = "";
     taskMetaInput.value = "";
-    taskTypeInput.value = "habit";
+    renderTaskTypeOptions(defaultTaskTypeForCalendar());
+    newTaskTypeEditor.hidden = true;
+    newTaskTypeName.value = "";
     saveTaskButton.textContent = "Добавить задачу";
     deleteTaskButton.hidden = true;
     showTaskEditor();
@@ -1339,6 +1909,109 @@
     renderStats();
   }
 
+  function defaultTaskTypeForCalendar() {
+    if (activeCalendar().id === "habits") return "habit";
+    if (activeCalendar().id === "sport") return "sport";
+    return "work";
+  }
+
+  function taskTypeById(typeId) {
+    return taskTypes().find((type) => type.id === typeId)
+      || { id: typeId || "personal", name: "Другое", color: "#4d6b78", system: false };
+  }
+
+  function renderTaskTypeOptions(selectedId = taskTypeInput.value) {
+    const preferred = taskTypes().some((type) => type.id === selectedId)
+      ? selectedId
+      : defaultTaskTypeForCalendar();
+    taskTypeInput.innerHTML = taskTypes()
+      .map((type) => `<option value="${escapeAttribute(type.id)}">${escapeHtml(type.name)}</option>`)
+      .join("");
+    taskTypeInput.value = preferred;
+  }
+
+  function showNewTaskTypeEditor() {
+    newTaskTypeEditor.hidden = false;
+    newTaskTypeName.value = "";
+    requestAnimationFrame(() => newTaskTypeName.focus());
+  }
+
+  function saveNewTaskType() {
+    const name = newTaskTypeName.value.trim().slice(0, 24);
+    if (!name) {
+      newTaskTypeName.focus();
+      return;
+    }
+    const existing = taskTypes().find((type) => type.name.toLocaleLowerCase("ru") === name.toLocaleLowerCase("ru"));
+    if (existing) {
+      renderTaskTypeOptions(existing.id);
+      newTaskTypeEditor.hidden = true;
+      return;
+    }
+    const palette = ["#7b61a8", "#9a4352", "#4d6b78", "#9a6a2f", "#397082"];
+    const type = {
+      id: `type-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      name,
+      color: palette[taskTypes().length % palette.length],
+      system: false
+    };
+    state.taskTypes.push(type);
+    state.taskTypesUpdatedAt = new Date().toISOString();
+    saveState();
+    renderTaskTypeOptions(type.id);
+    renderTaskTypeSettings();
+    newTaskTypeEditor.hidden = true;
+  }
+
+  function renderTaskTypeSettings() {
+    if (!taskTypeSettingsList) return;
+    taskTypeSettingsList.innerHTML = "";
+    taskTypes().forEach((type) => {
+      const row = document.createElement("div");
+      row.className = "task-type-settings-row";
+      row.innerHTML = `
+        <span class="task-type-settings-swatch" style="--type-color:${type.color}"></span>
+        <strong>${escapeHtml(type.name)}</strong>
+        ${type.system ? '<small>Системный</small>' : `
+          <button class="icon-button remove-task-type-button" type="button" aria-label="Удалить тип ${escapeAttribute(type.name)}" title="Удалить">×</button>
+        `}
+      `;
+      const removeButton = row.querySelector(".remove-task-type-button");
+      if (removeButton) removeButton.addEventListener("click", () => removeTaskType(type.id));
+      taskTypeSettingsList.appendChild(row);
+    });
+  }
+
+  function removeTaskType(typeId) {
+    const type = taskTypes().find((item) => item.id === typeId);
+    if (!type || type.system) return;
+    if (!window.confirm(`Удалить тип «${type.name}»? Записи этого типа станут личными.`)) return;
+    const timestamp = new Date().toISOString();
+    calendars().forEach((calendar) => {
+      const store = calendarStore(calendar.id);
+      let storeChanged = false;
+      Object.values(store.dayPlans).forEach((plan) => {
+        if (!Array.isArray(plan.tasks)) return;
+        let changed = false;
+        plan.tasks.forEach((task) => {
+          if (task.type !== typeId) return;
+          task.type = "personal";
+          changed = true;
+        });
+        if (changed) {
+          plan.updatedAt = timestamp;
+          storeChanged = true;
+        }
+      });
+      if (storeChanged) store.updatedAt = timestamp;
+    });
+    state.taskTypes = taskTypes().filter((item) => item.id !== typeId);
+    state.taskTypesUpdatedAt = timestamp;
+    saveState();
+    renderTaskTypeSettings();
+    renderDay();
+  }
+
   function renderStats() {
     let habitDone = 0;
     let habitTotal = 0;
@@ -1348,32 +2021,37 @@
     let sportTotal = 0;
     let currentStreak = 0;
 
-    trackedDays().forEach((day) => {
-      const visibleDay = effectiveDay(day);
-      const entry = readEntry(day.key);
-      const required = visibleDay.tasks.filter((task) => task.type === "habit");
-      if (day.date < today) {
-        const requiredDone = required.length > 0 && required.every((task) => entry.tasks[task.id]);
-        currentStreak = requiredDone ? currentStreak + 1 : 0;
-      } else if (formatKey(day.date) === formatKey(today)) {
-        const requiredDone = required.length > 0 && required.every((task) => entry.tasks[task.id]);
-        if (requiredDone) currentStreak += 1;
-      }
-
-      visibleDay.tasks.forEach((task) => {
-        if (task.type === "habit") {
-          habitTotal += 1;
-          if (entry.tasks[task.id]) habitDone += 1;
-        }
-        if (task.type === "work") {
-          workTotal += 1;
-          if (entry.tasks[task.id]) workDone += 1;
-        }
-        if (task.type === "sport") {
-          sportTotal += 1;
-          if (entry.tasks[task.id]) sportDone += 1;
-        }
+    calendars().forEach((calendar) => {
+      trackedDays(calendar.id).forEach((day) => {
+        if (day.date > today) return;
+        const visibleDay = effectiveDayForCalendar(day, calendar.id);
+        const entry = readEntryForCalendar(day.key, calendar.id);
+        visibleDay.tasks.forEach((task) => {
+          if (task.type === "habit") {
+            habitTotal += 1;
+            if (entry.tasks[task.id]) habitDone += 1;
+          } else if (task.type === "sport") {
+            sportTotal += 1;
+            if (entry.tasks[task.id]) sportDone += 1;
+          } else {
+            workTotal += 1;
+            if (entry.tasks[task.id]) workDone += 1;
+          }
+        });
       });
+    });
+
+    trackedDays("habits").forEach((day) => {
+      if (day.date > today) return;
+      const visibleDay = effectiveDayForCalendar(day, "habits");
+      const entry = readEntryForCalendar(day.key, "habits");
+      const required = visibleDay.tasks.filter((task) => task.type === "habit");
+      const requiredDone = required.length > 0 && required.every((task) => entry.tasks[task.id]);
+      if (day.date < today) {
+        currentStreak = requiredDone ? currentStreak + 1 : 0;
+      } else if (requiredDone) {
+        currentStreak += 1;
+      }
     });
 
     habitScore.textContent = `${percent(habitDone, habitTotal)}%`;
@@ -1383,15 +2061,23 @@
     streakScore.textContent = streakText;
     topStreakScore.textContent = streakText;
     streakFlame.className.baseVal = `flame-icon ${streakLevelClass(currentStreak)}`;
+    renderProfileCalendarSummary();
   }
 
-  function trackedDays() {
-    const result = new Map(plannedDays.map((day) => [day.key, day]));
-    Object.keys(state.dayPlans || {}).forEach((key) => {
-      result.set(key, dayForKey(key));
+  function trackedDays(calendarId = activeCalendar().id) {
+    const result = new Map();
+    const rangeStart = new Date(Math.max(planStartDate.getTime(), new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29).getTime()));
+    const rangeEnd = new Date(today);
+    for (let date = new Date(rangeStart); date <= rangeEnd; date.setDate(date.getDate() + 1)) {
+      const day = dayForDate(new Date(date), calendarId);
+      result.set(day.key, day);
+    }
+    const store = calendarStore(calendarId);
+    Object.keys(store.dayPlans).forEach((key) => {
+      if (isDateKey(key)) result.set(key, dayForKey(key, calendarId));
     });
-    Object.keys(state).filter(isDateKey).forEach((key) => {
-      result.set(key, dayForKey(key));
+    Object.keys(store.entries).forEach((key) => {
+      if (isDateKey(key)) result.set(key, dayForKey(key, calendarId));
     });
     return Array.from(result.values()).sort((left, right) => left.date - right.date);
   }
@@ -1597,9 +2283,12 @@
     today = currentDayDate();
     saveState({ skipCloud: true });
     isApplyingCloud = false;
+    renderCalendarNavigation();
     renderCalendar();
     renderStats();
     renderGoals();
+    renderCalendarSettings();
+    renderTaskTypeSettings();
     renderProfilePhoto();
     renderAccount();
     renderReminderSettings();
@@ -1611,33 +2300,64 @@
     const merged = JSON.parse(JSON.stringify(payload || {}));
     const current = exportProgressState();
     const baselineState = baseline || {};
-    const handledKeys = new Set(["dayPlans"]);
-    const dateKeys = new Set([
-      ...Object.keys(current).filter(isDateKey),
-      ...Object.keys(baselineState).filter(isDateKey)
-    ]);
-
-    dateKeys.forEach((key) => {
-      handledKeys.add(key);
-      preserveChangedValue(merged, current, baselineState, key);
-    });
-
-    const currentPlans = current.dayPlans && typeof current.dayPlans === "object" ? current.dayPlans : {};
-    const baselinePlans = baselineState.dayPlans && typeof baselineState.dayPlans === "object"
-      ? baselineState.dayPlans
-      : {};
-    const mergedPlans = merged.dayPlans && typeof merged.dayPlans === "object"
-      ? { ...merged.dayPlans }
-      : {};
-    new Set([...Object.keys(currentPlans), ...Object.keys(baselinePlans)]).forEach((key) => {
-      preserveChangedValue(mergedPlans, currentPlans, baselinePlans, key);
-    });
-    merged.dayPlans = mergedPlans;
+    const handledKeys = new Set(["calendarData"]);
+    merged.calendarData = mergeChangedCalendarData(
+      merged.calendarData,
+      current.calendarData,
+      baselineState.calendarData
+    );
 
     new Set([...Object.keys(current), ...Object.keys(baselineState)]).forEach((key) => {
       if (!handledKeys.has(key)) preserveChangedValue(merged, current, baselineState, key);
     });
     return merged;
+  }
+
+  function mergeChangedCalendarData(cloudValue, currentValue, baselineValue) {
+    const target = cloudValue && typeof cloudValue === "object"
+      ? JSON.parse(JSON.stringify(cloudValue))
+      : {};
+    const currentData = currentValue && typeof currentValue === "object" ? currentValue : {};
+    const baselineData = baselineValue && typeof baselineValue === "object" ? baselineValue : {};
+    new Set([...Object.keys(currentData), ...Object.keys(baselineData)]).forEach((calendarId) => {
+      const currentStore = currentData[calendarId];
+      const baselineStore = baselineData[calendarId];
+      if (JSON.stringify(currentStore) === JSON.stringify(baselineStore)) return;
+      if (currentStore === undefined) {
+        delete target[calendarId];
+        return;
+      }
+      if (!baselineStore) {
+        target[calendarId] = JSON.parse(JSON.stringify(currentStore));
+        return;
+      }
+
+      const targetStore = target[calendarId] && typeof target[calendarId] === "object"
+        ? { ...target[calendarId] }
+        : {};
+      ["dayPlans", "entries"].forEach((mapName) => {
+        const targetMap = targetStore[mapName] && typeof targetStore[mapName] === "object"
+          ? { ...targetStore[mapName] }
+          : {};
+        const currentMap = currentStore[mapName] && typeof currentStore[mapName] === "object"
+          ? currentStore[mapName]
+          : {};
+        const baselineMap = baselineStore[mapName] && typeof baselineStore[mapName] === "object"
+          ? baselineStore[mapName]
+          : {};
+        new Set([...Object.keys(currentMap), ...Object.keys(baselineMap)]).forEach((key) => {
+          preserveChangedValue(targetMap, currentMap, baselineMap, key);
+        });
+        targetStore[mapName] = targetMap;
+      });
+      new Set([...Object.keys(currentStore), ...Object.keys(baselineStore)]).forEach((key) => {
+        if (!["dayPlans", "entries"].includes(key)) {
+          preserveChangedValue(targetStore, currentStore, baselineStore, key);
+        }
+      });
+      target[calendarId] = targetStore;
+    });
+    return target;
   }
 
   function preserveChangedValue(target, current, baseline, key) {
@@ -1722,12 +2442,23 @@
     const result = {};
     for (let offset = 0; offset <= 45; offset += 1) {
       const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
-      const day = effectiveDay(dayForDate(date));
-      const entry = readEntry(day.key);
-      const incomplete = day.tasks
-        .filter((task) => !entry.tasks[task.id])
-        .map((task) => ({ id: task.id, title: task.title }));
-      result[day.key] = { total: day.tasks.length, incomplete };
+      const key = formatKey(date);
+      const incomplete = [];
+      let total = 0;
+      calendars().forEach((calendar) => {
+        const day = effectiveDayForCalendar(dayForDate(date, calendar.id), calendar.id);
+        const entry = readEntryForCalendar(day.key, calendar.id);
+        total += day.tasks.length;
+        day.tasks
+          .filter((task) => !entry.tasks[task.id])
+          .forEach((task) => {
+            incomplete.push({
+              id: `${calendar.id}:${task.id}`,
+              title: `${calendar.name}: ${task.title}`
+            });
+          });
+      });
+      result[key] = { total, incomplete };
     }
     return result;
   }
@@ -1952,14 +2683,20 @@
   }
 
   function ensureEntry(key) {
-    if (!state[key]) {
-      state[key] = { tasks: {}, energy: 5, notes: "", updatedAt: new Date().toISOString() };
+    const store = calendarStore();
+    if (!store.entries[key]) {
+      store.entries[key] = { tasks: {}, energy: 5, notes: "", updatedAt: new Date().toISOString() };
+      store.updatedAt = new Date().toISOString();
     }
-    return state[key];
+    return store.entries[key];
   }
 
   function readEntry(key) {
-    return state[key] || { tasks: {}, energy: 5, notes: "" };
+    return readEntryForCalendar(key, activeCalendar().id);
+  }
+
+  function readEntryForCalendar(key, calendarId) {
+    return calendarStore(calendarId).entries[key] || { tasks: {}, energy: 5, notes: "" };
   }
 
   function isNotesInputActive() {
@@ -2034,7 +2771,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=32").then((registration) => registration.update()).catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=36").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();
