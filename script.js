@@ -35,6 +35,8 @@
   let editingTaskIndex = null;
   let calendarTouchStart = null;
   let dateWatchTimer = null;
+  let notesCloudSaveTimer = null;
+  let isNotesComposing = false;
 
   const calendarGrid = document.querySelector("#calendarGrid");
   const monthTitle = document.querySelector("#monthTitle");
@@ -185,11 +187,24 @@
     saveState();
   });
 
+  dayNotes.addEventListener("compositionstart", () => {
+    isNotesComposing = true;
+    clearTimeout(notesCloudSaveTimer);
+    notesCloudSaveTimer = null;
+  });
+
+  dayNotes.addEventListener("compositionend", () => {
+    isNotesComposing = false;
+    saveNotesDraft({ cloudDelay: 1400 });
+  });
+
   dayNotes.addEventListener("input", () => {
-    const entry = ensureEntry(selectedKey);
-    entry.notes = dayNotes.value;
-    entry.updatedAt = new Date().toISOString();
-    saveState();
+    saveNotesDraft({ cloudDelay: isNotesComposing ? null : 1400 });
+  });
+
+  dayNotes.addEventListener("blur", () => {
+    isNotesComposing = false;
+    saveNotesDraft({ cloudDelay: 100 });
   });
 
   window.addEventListener("online", handleAppResume);
@@ -1185,8 +1200,10 @@
     energyRange.value = entry.energy;
     energyRange.disabled = false;
     energyValue.textContent = entry.energy;
-    dayNotes.value = entry.notes || "";
-    dayNotes.readOnly = false;
+    if (!isNotesInputActive() && dayNotes.value !== (entry.notes || "")) {
+      dayNotes.value = entry.notes || "";
+    }
+    if (dayNotes.readOnly) dayNotes.readOnly = false;
     taskList.innerHTML = "";
 
     day.tasks.forEach((task) => {
@@ -1459,6 +1476,7 @@
     if (isCloudBusy && options.auto) return;
     const settings = getSyncSettings({ silent: options.auto });
     if (!settings) return;
+    const requestPayload = exportProgressState();
 
     isCloudBusy = true;
     setSyncBusy(true);
@@ -1467,12 +1485,17 @@
 
     try {
       const result = await cloudRequest("push", settings, {
-        payload: exportProgressState(),
+        payload: requestPayload,
         baseRevision: state.cloudRevision || 0,
         reminderDays: buildReminderDays(),
         legacyCode: state.syncCode || undefined
       });
-      applyCloudState(result.payload, result.updatedAt, result.revision);
+      captureActiveNotesDraft();
+      applyCloudState(
+        mergeCloudPayloadWithLocalChanges(result.payload, requestPayload),
+        result.updatedAt,
+        result.revision
+      );
       clearLegacyCloudPassword();
       if (!options.auto) {
         setSyncStatus("Готово. Аккаунт синхронизирован.", "ok");
@@ -1494,8 +1517,19 @@
   async function pullCloudState(options = {}) {
     if (isCloudBusy && options.auto) return;
     if (options.auto && cloudSaveTimer) return;
+    if (options.auto && isNotesInputActive()) return;
+    if (notesCloudSaveTimer) {
+      clearTimeout(notesCloudSaveTimer);
+      notesCloudSaveTimer = null;
+      if (options.auto) {
+        scheduleCloudSave(0);
+        return;
+      }
+      return pushCloudState();
+    }
     const settings = getSyncSettings({ silent: options.auto });
     if (!settings) return;
+    const requestPayload = exportProgressState();
 
     isCloudBusy = true;
     setSyncBusy(true);
@@ -1514,7 +1548,12 @@
         return await pushCloudState({ auto: true });
       }
       if (result.exists && (!state.cloudRevision || result.revision > state.cloudRevision)) {
-        applyCloudState(result.payload, result.updatedAt, result.revision);
+        captureActiveNotesDraft();
+        applyCloudState(
+          mergeCloudPayloadWithLocalChanges(result.payload, requestPayload),
+          result.updatedAt,
+          result.revision
+        );
         setSyncStatus(options.auto ? "Подтянул свежие изменения из облака." : "Прогресс загружен. Календарь, профиль и фото обновлены.", "ok");
       } else if (!options.auto) {
         setSyncStatus("У тебя уже свежая версия прогресса.", "ok");
@@ -1568,6 +1607,48 @@
     if (activeModal === "day") renderDay();
   }
 
+  function mergeCloudPayloadWithLocalChanges(payload, baseline) {
+    const merged = JSON.parse(JSON.stringify(payload || {}));
+    const current = exportProgressState();
+    const baselineState = baseline || {};
+    const handledKeys = new Set(["dayPlans"]);
+    const dateKeys = new Set([
+      ...Object.keys(current).filter(isDateKey),
+      ...Object.keys(baselineState).filter(isDateKey)
+    ]);
+
+    dateKeys.forEach((key) => {
+      handledKeys.add(key);
+      preserveChangedValue(merged, current, baselineState, key);
+    });
+
+    const currentPlans = current.dayPlans && typeof current.dayPlans === "object" ? current.dayPlans : {};
+    const baselinePlans = baselineState.dayPlans && typeof baselineState.dayPlans === "object"
+      ? baselineState.dayPlans
+      : {};
+    const mergedPlans = merged.dayPlans && typeof merged.dayPlans === "object"
+      ? { ...merged.dayPlans }
+      : {};
+    new Set([...Object.keys(currentPlans), ...Object.keys(baselinePlans)]).forEach((key) => {
+      preserveChangedValue(mergedPlans, currentPlans, baselinePlans, key);
+    });
+    merged.dayPlans = mergedPlans;
+
+    new Set([...Object.keys(current), ...Object.keys(baselineState)]).forEach((key) => {
+      if (!handledKeys.has(key)) preserveChangedValue(merged, current, baselineState, key);
+    });
+    return merged;
+  }
+
+  function preserveChangedValue(target, current, baseline, key) {
+    if (JSON.stringify(current[key]) === JSON.stringify(baseline[key])) return;
+    if (current[key] === undefined) {
+      delete target[key];
+      return;
+    }
+    target[key] = JSON.parse(JSON.stringify(current[key]));
+  }
+
   function startAutoSync() {
     if (cloudPullTimer) {
       clearInterval(cloudPullTimer);
@@ -1581,12 +1662,12 @@
     }, 20000);
   }
 
-  function scheduleCloudSave() {
+  function scheduleCloudSave(delay = 900) {
     if (!getSyncSettings({ silent: true }) || isApplyingCloud) return;
     clearTimeout(cloudSaveTimer);
     cloudSaveTimer = setTimeout(() => {
       pushCloudState({ auto: true });
-    }, 900);
+    }, delay);
   }
 
   async function cloudRequest(action, settings, data = {}) {
@@ -1881,6 +1962,36 @@
     return state[key] || { tasks: {}, energy: 5, notes: "" };
   }
 
+  function isNotesInputActive() {
+    return isNotesComposing || document.activeElement === dayNotes;
+  }
+
+  function captureActiveNotesDraft() {
+    if (!isNotesInputActive()) return false;
+    return saveNotesDraft({ cloudDelay: null });
+  }
+
+  function saveNotesDraft(options = {}) {
+    if (!selectedKey) return false;
+    const entry = ensureEntry(selectedKey);
+    const nextNotes = dayNotes.value;
+    const changed = entry.notes !== nextNotes;
+    if (changed) {
+      entry.notes = nextNotes;
+      entry.updatedAt = new Date().toISOString();
+      saveState({ skipCloud: true });
+    }
+
+    if (options.cloudDelay !== null && (changed || options.cloudDelay <= 100)) {
+      clearTimeout(notesCloudSaveTimer);
+      notesCloudSaveTimer = setTimeout(() => {
+        notesCloudSaveTimer = null;
+        scheduleCloudSave(0);
+      }, Math.max(0, Number(options.cloudDelay) || 0));
+    }
+    return changed;
+  }
+
   function loadState() {
     return readStoredState(storageKey);
   }
@@ -1923,7 +2034,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=31").then((registration) => registration.update()).catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=32").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();

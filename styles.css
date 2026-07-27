@@ -1317,6 +1317,10 @@ textarea:focus,
 }
 
 @media (max-width: 760px) {
+  html[data-theme="knight"] .day-panel:has(#dayNotes:focus) {
+    backdrop-filter: none;
+  }
+
   .app-shell {
     width: min(100% - 20px, 980px);
     padding-top: 14px;
