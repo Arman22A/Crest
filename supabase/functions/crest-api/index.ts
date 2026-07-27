@@ -42,15 +42,30 @@ Deno.serve(async (request) => {
 async function pullProgress(userId: string, headers: HeadersInit) {
   const row = await progressRow(userId);
   if (!row) return json({ exists: false, payload: {}, revision: 0, updatedAt: null }, 200, headers);
-  return json({ exists: true, payload: row.payload, revision: row.revision, updatedAt: row.updated_at }, 200, headers);
+  const restored = restoreLegacyLockedDays(isObject(row.payload) ? row.payload : {});
+  if (!restored.changed) {
+    return json({ exists: true, payload: restored.payload, revision: row.revision, updatedAt: row.updated_at }, 200, headers);
+  }
+
+  const revision = Number(row.revision) + 1;
+  const updatedAt = new Date().toISOString();
+  const { error } = await supabase
+    .from("progress_sync")
+    .update({ payload: restored.payload, revision, updated_at: updatedAt })
+    .eq("user_id", userId);
+  if (error) throw error;
+  return json({ exists: true, payload: restored.payload, revision, updatedAt }, 200, headers);
 }
 
 async function pushProgress(userId: string, body: Record<string, unknown>, headers: HeadersInit) {
   const syncId = userSyncId(userId);
-  const incoming = isObject(body.payload) ? body.payload : {};
+  const incoming = restoreLegacyLockedDays(isObject(body.payload) ? body.payload : {}).payload;
   const baseRevision = Number(body.baseRevision) || 0;
   const accountCurrent = await progressRow(userId);
-  let current = accountCurrent;
+  let current = accountCurrent ? {
+    ...accountCurrent,
+    payload: restoreLegacyLockedDays(isObject(accountCurrent.payload) ? accountCurrent.payload : {}).payload
+  } : accountCurrent;
   let legacySyncId = "";
   const legacyCode = String(body.legacyCode || "").trim();
   if (legacyCode.length >= 8) {
@@ -279,36 +294,63 @@ function userSyncId(userId: string) {
 class AuthError extends Error {}
 
 function mergeProgress(server: Record<string, unknown>, incoming: Record<string, unknown>, revisionsMatch: boolean) {
-  const merged: Record<string, unknown> = revisionsMatch ? { ...incoming } : { ...server, ...incoming };
-  const serverLocked = isObject(server.lockedDays) ? server.lockedDays : {};
-  const incomingLocked = isObject(incoming.lockedDays) ? incoming.lockedDays : {};
-  merged.lockedDays = { ...incomingLocked, ...serverLocked };
-  merged.dayPlans = mergeUpdatedMap(server.dayPlans, incoming.dayPlans, revisionsMatch);
+  const restoredServer = restoreLegacyLockedDays(server).payload;
+  const restoredIncoming = restoreLegacyLockedDays(incoming).payload;
+  const merged: Record<string, unknown> = revisionsMatch
+    ? { ...restoredIncoming }
+    : { ...restoredServer, ...restoredIncoming };
+  merged.dayPlans = mergeUpdatedMap(restoredServer.dayPlans, restoredIncoming.dayPlans, revisionsMatch);
 
-  const dateKeys = new Set([...Object.keys(server), ...Object.keys(incoming)].filter(isDateKey));
+  const dateKeys = new Set([...Object.keys(restoredServer), ...Object.keys(restoredIncoming)].filter(isDateKey));
   for (const key of dateKeys) {
-    if (serverLocked[key]) {
-      merged[key] = server[key];
-    } else {
-      merged[key] = revisionsMatch ? incoming[key] : newer(server[key], incoming[key]);
-    }
+    merged[key] = revisionsMatch
+      ? restoredIncoming[key]
+      : newer(restoredServer[key], restoredIncoming[key]);
   }
 
-  for (const key of Object.keys(serverLocked)) {
-    if (isObject(server.dayPlans) && server.dayPlans[key]) {
-      (merged.dayPlans as Record<string, unknown>)[key] = server.dayPlans[key];
-    }
-  }
-
-  chooseSection(merged, server, incoming, "goals", "goalsUpdatedAt", revisionsMatch);
-  chooseSection(merged, server, incoming, "profileName", "profileUpdatedAt", revisionsMatch);
-  chooseSection(merged, server, incoming, "profilePhoto", "profileUpdatedAt", revisionsMatch);
-  chooseSection(merged, server, incoming, "profilePhotoVersion", "profileUpdatedAt", revisionsMatch);
-  chooseSection(merged, server, incoming, "theme", "themeUpdatedAt", revisionsMatch);
+  chooseSection(merged, restoredServer, restoredIncoming, "goals", "goalsUpdatedAt", revisionsMatch);
+  chooseSection(merged, restoredServer, restoredIncoming, "profileName", "profileUpdatedAt", revisionsMatch);
+  chooseSection(merged, restoredServer, restoredIncoming, "profilePhoto", "profileUpdatedAt", revisionsMatch);
+  chooseSection(merged, restoredServer, restoredIncoming, "profilePhotoVersion", "profileUpdatedAt", revisionsMatch);
+  chooseSection(merged, restoredServer, restoredIncoming, "theme", "themeUpdatedAt", revisionsMatch);
   for (const field of ["reminderMorning", "reminderEvening", "reminderTimezone"]) {
-    chooseSection(merged, server, incoming, field, "reminderUpdatedAt", revisionsMatch);
+    chooseSection(merged, restoredServer, restoredIncoming, field, "reminderUpdatedAt", revisionsMatch);
   }
+  delete merged.lockedDays;
+  merged.schemaVersion = Math.max(Number(merged.schemaVersion) || 0, 31);
   return merged;
+}
+
+function restoreLegacyLockedDays(value: Record<string, unknown>) {
+  const payload: Record<string, unknown> = { ...value };
+  const hadLockedDays = Object.prototype.hasOwnProperty.call(payload, "lockedDays");
+  const lockedDays = isObject(payload.lockedDays) ? payload.lockedDays : {};
+  const keys = Object.keys(lockedDays);
+  delete payload.lockedDays;
+  if (!keys.length) return { payload, changed: hadLockedDays };
+
+  const dayPlans = isObject(payload.dayPlans) ? { ...payload.dayPlans } : {};
+  const migrationTime = new Date().toISOString();
+
+  for (const key of keys) {
+    const snapshot = isObject(lockedDays[key]) ? lockedDays[key] : null;
+    if (!snapshot || !isDateKey(key)) continue;
+    const existingPlan = isObject(dayPlans[key]) ? dayPlans[key] : {};
+    const restoredAt = typeof snapshot.lockedAt === "string" ? snapshot.lockedAt : migrationTime;
+    dayPlans[key] = {
+      ...existingPlan,
+      ...(typeof snapshot.focus === "string" ? { focus: snapshot.focus } : {}),
+      ...(Array.isArray(snapshot.tasks) ? { tasks: snapshot.tasks } : {}),
+      updatedAt: restoredAt
+    };
+    if (isObject(snapshot.entry)) {
+      payload[key] = { ...snapshot.entry, updatedAt: restoredAt };
+    }
+  }
+
+  payload.dayPlans = dayPlans;
+  payload.schemaVersion = Math.max(Number(payload.schemaVersion) || 0, 31);
+  return { payload, changed: true };
 }
 
 function mergeUpdatedMap(serverValue: unknown, incomingValue: unknown, revisionsMatch: boolean) {

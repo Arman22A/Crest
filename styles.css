@@ -1136,27 +1136,6 @@ h2 {
   color: var(--blue);
 }
 
-.locked-day-notice {
-  margin: 14px 0 0;
-  border-left: 3px solid var(--line-strong);
-  padding: 9px 12px;
-  color: var(--muted);
-  background: var(--panel-soft);
-  font-size: 0.84rem;
-  line-height: 1.4;
-}
-
-.day-panel.is-locked .check-button,
-.day-panel.is-locked input,
-.day-panel.is-locked textarea {
-  cursor: default;
-}
-
-.day-panel.is-locked .task-row,
-.day-panel.is-locked .notes-area {
-  opacity: 0.88;
-}
-
 .day-actions {
   display: flex;
   align-items: center;
@@ -2228,12 +2207,6 @@ html[data-theme="knight"] .switch-control input:checked + .switch-track span {
 
 html[data-theme="knight"] .reminder-status.ok {
   color: #bcded0;
-}
-
-html[data-theme="knight"] .locked-day-notice {
-  border-left-color: rgba(226, 239, 249, 0.56);
-  color: #aebdca;
-  background: rgba(148, 179, 203, 0.08);
 }
 
 html[data-theme="knight"] .sync-badge {

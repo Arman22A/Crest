@@ -24,7 +24,6 @@
   let today = currentDayDate();
   const plannedDays = buildPlannedDays();
   migrateState();
-  sealPastDays({ persist: false });
   let visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   let selectedKey = formatKey(today);
   let activeModal = null;
@@ -61,7 +60,6 @@
   const selectedWeekday = document.querySelector("#selectedWeekday");
   const selectedDate = document.querySelector("#selectedDate");
   const loadPill = document.querySelector("#loadPill");
-  const lockedDayNotice = document.querySelector("#lockedDayNotice");
   const dayFocus = document.querySelector("#dayFocus");
   const taskList = document.querySelector("#taskList");
   const editDayButton = document.querySelector("#editDayButton");
@@ -180,7 +178,6 @@
   });
 
   energyRange.addEventListener("input", () => {
-    if (isDayLocked(selectedKey)) return;
     const entry = ensureEntry(selectedKey);
     entry.energy = Number(energyRange.value);
     entry.updatedAt = new Date().toISOString();
@@ -189,7 +186,6 @@
   });
 
   dayNotes.addEventListener("input", () => {
-    if (isDayLocked(selectedKey)) return;
     const entry = ensureEntry(selectedKey);
     entry.notes = dayNotes.value;
     entry.updatedAt = new Date().toISOString();
@@ -601,15 +597,6 @@
   }
 
   function effectiveDay(day) {
-    const locked = state.lockedDays && state.lockedDays[day.key];
-    if (locked) {
-      return {
-        ...day,
-        focus: locked.focus || day.focus,
-        tasks: Array.isArray(locked.tasks) ? locked.tasks : day.tasks
-      };
-    }
-
     return editableDay(day);
   }
 
@@ -644,7 +631,6 @@
   }
 
   function ensureDayPlan(key) {
-    if (isDayLocked(key)) return effectiveDay(dayForKey(key));
     const day = dayForKey(key);
     state.dayPlans = state.dayPlans || {};
     if (!state.dayPlans[key]) {
@@ -661,13 +647,52 @@
     return tasks.map((task) => ({ ...task }));
   }
 
+  function restoreLegacyLockedDays() {
+    const lockedDays = state.lockedDays && typeof state.lockedDays === "object" ? state.lockedDays : {};
+    const keys = Object.keys(lockedDays);
+    delete state.lockedDays;
+    if (!keys.length) return false;
+
+    const migrationTime = new Date().toISOString();
+    state.dayPlans = state.dayPlans && typeof state.dayPlans === "object" ? state.dayPlans : {};
+
+    keys.forEach((key) => {
+      const snapshot = lockedDays[key];
+      if (!isDateKey(key) || !snapshot || typeof snapshot !== "object") return;
+      const restoredAt = typeof snapshot.lockedAt === "string" ? snapshot.lockedAt : migrationTime;
+      const baseDay = dayForKey(key);
+      const existingPlan = state.dayPlans[key] && typeof state.dayPlans[key] === "object"
+        ? state.dayPlans[key]
+        : {};
+      state.dayPlans[key] = {
+        ...existingPlan,
+        focus: typeof snapshot.focus === "string"
+          ? snapshot.focus
+          : (existingPlan.focus || baseDay.focus),
+        tasks: Array.isArray(snapshot.tasks)
+          ? cloneTasks(snapshot.tasks)
+          : (Array.isArray(existingPlan.tasks) ? cloneTasks(existingPlan.tasks) : cloneTasks(baseDay.tasks)),
+        updatedAt: restoredAt
+      };
+
+      if (snapshot.entry && typeof snapshot.entry === "object") {
+        state[key] = {
+          ...JSON.parse(JSON.stringify(snapshot.entry)),
+          updatedAt: restoredAt
+        };
+      }
+    });
+
+    return true;
+  }
+
   function migrateState() {
     const fallbackUpdatedAt = state.localUpdatedAt || new Date().toISOString();
-    state.schemaVersion = 29;
+    state.schemaVersion = 31;
     state.profileName = String(state.profileName || "").trim().slice(0, 40);
     if (typeof state.useStarterTemplate !== "boolean") state.useStarterTemplate = true;
-    state.lockedDays = state.lockedDays && typeof state.lockedDays === "object" ? state.lockedDays : {};
     state.dayPlans = state.dayPlans && typeof state.dayPlans === "object" ? state.dayPlans : {};
+    restoreLegacyLockedDays();
     state.reminderMorning = validTime(state.reminderMorning) ? state.reminderMorning : "10:00";
     state.reminderEvening = validTime(state.reminderEvening) ? state.reminderEvening : "16:00";
     state.reminderTimezone = state.reminderTimezone || detectedTimezone();
@@ -719,44 +744,12 @@
     return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || ""));
   }
 
-  function isDayLocked(key) {
-    if (state.lockedDays && state.lockedDays[key]) return true;
-    return dayForKey(key).date < today;
-  }
-
-  function sealPastDays(options = {}) {
-    state.lockedDays = state.lockedDays || {};
-    let changed = false;
-
-    trackedDays().forEach((day) => {
-      if (day.date >= today || state.lockedDays[day.key]) return;
-      const visibleDay = editableDay(day);
-      const entry = state[day.key] || { tasks: {}, energy: 5, notes: "" };
-      state.lockedDays[day.key] = {
-        focus: visibleDay.focus,
-        tasks: cloneTasks(visibleDay.tasks),
-        entry: JSON.parse(JSON.stringify(entry)),
-        lockedAt: new Date().toISOString()
-      };
-      changed = true;
-    });
-
-    if (!changed) return false;
-    if (options.persist === false) {
-      localStorage.setItem(storageKey, JSON.stringify(state));
-    } else {
-      saveState();
-    }
-    return true;
-  }
-
   function refreshCurrentDate() {
     now = new Date();
     const nextToday = currentDayDate(now);
     if (formatKey(nextToday) === formatKey(today)) return false;
     today = nextToday;
     visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    sealPastDays();
     renderCalendar();
     renderStats();
     if (activeModal === "day") renderDay();
@@ -770,7 +763,6 @@
 
   function handleAppResume() {
     refreshCurrentDate();
-    sealPastDays();
     pullCloudState({ auto: true });
     refreshNotificationSubscription();
   }
@@ -1177,8 +1169,7 @@
   function renderDay() {
     const sourceDay = dayForKey(selectedKey);
     const day = effectiveDay(sourceDay);
-    const locked = isDayLocked(sourceDay.key);
-    const entry = locked ? readEntry(sourceDay.key) : ensureEntry(sourceDay.key);
+    const entry = ensureEntry(sourceDay.key);
     const status = dayStatus(day, entry);
     selectedWeekday.textContent = weekdayNames[sourceDay.date.getDay()];
     selectedDate.textContent = formatDate(sourceDay.date);
@@ -1186,33 +1177,30 @@
     loadPill.className = `load-pill ${status.kind}`;
     dayFocus.textContent = day.focus;
     editDayButton.textContent = isEditingDay ? "Готово" : "Изменить";
-    editDayButton.hidden = locked;
-    lockedDayNotice.hidden = !locked;
-    dayPanel.classList.toggle("is-locked", locked);
-    dayFocus.contentEditable = isEditingDay && !locked ? "true" : "false";
-    dayFocus.classList.toggle("is-editable", isEditingDay && !locked);
-    dayFocus.setAttribute("aria-label", isEditingDay && !locked ? "Изменить фокус дня" : "Фокус дня");
-    addTaskButton.hidden = !isEditingDay || locked;
+    editDayButton.hidden = false;
+    dayFocus.contentEditable = isEditingDay ? "true" : "false";
+    dayFocus.classList.toggle("is-editable", isEditingDay);
+    dayFocus.setAttribute("aria-label", isEditingDay ? "Изменить фокус дня" : "Фокус дня");
+    addTaskButton.hidden = !isEditingDay;
     energyRange.value = entry.energy;
-    energyRange.disabled = locked;
+    energyRange.disabled = false;
     energyValue.textContent = entry.energy;
     dayNotes.value = entry.notes || "";
-    dayNotes.readOnly = locked;
+    dayNotes.readOnly = false;
     taskList.innerHTML = "";
 
     day.tasks.forEach((task) => {
       const row = document.createElement("div");
       const done = Boolean(entry.tasks[task.id]);
-      row.className = `task-row ${done ? "done" : ""} ${isEditingDay && !locked ? "is-editable" : ""}`;
+      row.className = `task-row ${done ? "done" : ""} ${isEditingDay ? "is-editable" : ""}`;
       row.innerHTML = `
-        <button class="check-button" type="button" aria-label="Отметить задачу" ${isEditingDay || locked ? "disabled" : ""}>${done ? "✓" : ""}</button>
-        <button class="task-content-button" type="button" ${isEditingDay && !locked ? "" : "disabled"} aria-label="Изменить задачу ${escapeAttribute(task.title)}">
+        <button class="check-button" type="button" aria-label="Отметить задачу" ${isEditingDay ? "disabled" : ""}>${done ? "✓" : ""}</button>
+        <button class="task-content-button" type="button" ${isEditingDay ? "" : "disabled"} aria-label="Изменить задачу ${escapeAttribute(task.title)}">
           <span class="task-title">${escapeHtml(task.title)}</span>
           <span class="task-meta">${escapeHtml(task.meta)}</span>
         </button>
       `;
       row.querySelector("button").addEventListener("click", () => {
-        if (locked) return;
         entry.tasks[task.id] = !entry.tasks[task.id];
         entry.updatedAt = new Date().toISOString();
         saveState();
@@ -1226,7 +1214,6 @@
   }
 
   function toggleDayEditor() {
-    if (isDayLocked(selectedKey)) return;
     isEditingDay = !isEditingDay;
     if (isEditingDay) ensureDayPlan(selectedKey);
     if (!isEditingDay) closeTaskEditor();
@@ -1234,7 +1221,7 @@
   }
 
   function saveDayFocus() {
-    if (!isEditingDay || isDayLocked(selectedKey)) return;
+    if (!isEditingDay) return;
     const plan = ensureDayPlan(selectedKey);
     plan.focus = dayFocus.textContent.trim() || "Без фокуса";
     plan.updatedAt = new Date().toISOString();
@@ -1249,7 +1236,6 @@
   }
 
   function openTaskEditor(index) {
-    if (isDayLocked(selectedKey)) return;
     const plan = ensureDayPlan(selectedKey);
     const task = plan.tasks[index];
     if (!task) return;
@@ -1265,7 +1251,6 @@
   }
 
   function openAddTaskEditor() {
-    if (isDayLocked(selectedKey)) return;
     editingTaskIndex = null;
     taskEditorEyebrow.textContent = "Новая задача";
     taskEditorTitle.textContent = "Добавить задачу";
@@ -1290,7 +1275,6 @@
   }
 
   function saveTaskFromEditor() {
-    if (isDayLocked(selectedKey)) return;
     const title = taskTitleInput.value.trim();
     if (!title) {
       taskTitleInput.focus();
@@ -1321,7 +1305,7 @@
   }
 
   function deleteTaskFromEditor() {
-    if (editingTaskIndex === null || isDayLocked(selectedKey)) return;
+    if (editingTaskIndex === null) return;
     const plan = ensureDayPlan(selectedKey);
     const removed = plan.tasks[editingTaskIndex];
     plan.tasks.splice(editingTaskIndex, 1);
@@ -1390,9 +1374,6 @@
       result.set(key, dayForKey(key));
     });
     Object.keys(state).filter(isDateKey).forEach((key) => {
-      result.set(key, dayForKey(key));
-    });
-    Object.keys(state.lockedDays || {}).forEach((key) => {
       result.set(key, dayForKey(key));
     });
     return Array.from(result.values()).sort((left, right) => left.date - right.date);
@@ -1575,7 +1556,6 @@
     });
     migrateState();
     today = currentDayDate();
-    sealPastDays({ persist: false });
     saveState({ skipCloud: true });
     isApplyingCloud = false;
     renderCalendar();
@@ -1782,7 +1762,6 @@
   async function refreshReminderTimezone() {
     state.reminderTimezone = detectedTimezone();
     today = currentDayDate();
-    sealPastDays();
     saveReminderValues();
     renderReminderSettings();
     renderCalendar();
@@ -1892,8 +1871,6 @@
   }
 
   function ensureEntry(key) {
-    const locked = state.lockedDays && state.lockedDays[key];
-    if (locked && locked.entry) return locked.entry;
     if (!state[key]) {
       state[key] = { tasks: {}, energy: 5, notes: "", updatedAt: new Date().toISOString() };
     }
@@ -1901,8 +1878,6 @@
   }
 
   function readEntry(key) {
-    const locked = state.lockedDays && state.lockedDays[key];
-    if (locked && locked.entry) return locked.entry;
     return state[key] || { tasks: {}, energy: 5, notes: "" };
   }
 
@@ -1948,7 +1923,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=30").then((registration) => registration.update()).catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=31").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();
