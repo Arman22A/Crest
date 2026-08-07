@@ -321,11 +321,12 @@ function mergeProgress(server: Record<string, unknown>, incoming: Record<string,
   chooseSection(merged, restoredServer, restoredIncoming, "calendars", "calendarsUpdatedAt", revisionsMatch);
   chooseSection(merged, restoredServer, restoredIncoming, "taskTypes", "taskTypesUpdatedAt", revisionsMatch);
   chooseSection(merged, restoredServer, restoredIncoming, "activeCalendarId", "activeCalendarUpdatedAt", revisionsMatch);
+  chooseSection(merged, restoredServer, restoredIncoming, "contentStudio", "contentStudioUpdatedAt", revisionsMatch);
   for (const field of ["reminderMorning", "reminderEvening", "reminderTimezone"]) {
     chooseSection(merged, restoredServer, restoredIncoming, field, "reminderUpdatedAt", revisionsMatch);
   }
   delete merged.lockedDays;
-  merged.schemaVersion = Math.max(Number(merged.schemaVersion) || 0, 32);
+  merged.schemaVersion = Math.max(Number(merged.schemaVersion) || 0, 33);
   return merged;
 }
 
@@ -357,7 +358,7 @@ function restoreLegacyLockedDays(value: Record<string, unknown>) {
   }
 
   payload.dayPlans = dayPlans;
-  payload.schemaVersion = Math.max(Number(payload.schemaVersion) || 0, 32);
+  payload.schemaVersion = Math.max(Number(payload.schemaVersion) || 0, 33);
   return { payload, changed: true };
 }
 
