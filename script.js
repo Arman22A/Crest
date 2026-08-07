@@ -19,6 +19,12 @@
   const weekdayNames = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
   const monthNames = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
   const calendarMonthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+  const contentStages = [
+    { id: "idea", name: "Идея" },
+    { id: "preparation", name: "Подготовка" },
+    { id: "production", name: "Производство" },
+    { id: "published", name: "Опубликовано" }
+  ];
 
   const state = loadState();
   let currentSession = null;
@@ -43,6 +49,10 @@
   let editingCalendarId = null;
   let selectedCalendarIcon = "calendar";
   let selectedCalendarColor = "#286fb4";
+  let activeContentView = "work";
+  let activeMobileContentStage = null;
+  let editingContentId = null;
+  let editingContentTemplateId = null;
 
   const calendarGrid = document.querySelector("#calendarGrid");
   const calendarTabs = document.querySelector("#calendarTabs");
@@ -148,6 +158,77 @@
   const calendarColorOptions = document.querySelector("#calendarColorOptions");
   const saveCalendarButton = document.querySelector("#saveCalendarButton");
   const deleteCalendarButton = document.querySelector("#deleteCalendarButton");
+  const planningSpace = document.querySelector("#planningSpace");
+  const contentSpace = document.querySelector("#contentSpace");
+  const planningSpaceButton = document.querySelector("#planningSpaceButton");
+  const contentSpaceButton = document.querySelector("#contentSpaceButton");
+  const contentNavButtons = document.querySelectorAll("[data-content-view]");
+  const contentPages = document.querySelectorAll("[data-content-page]");
+  const contentWorkspaceTitle = document.querySelector("#contentWorkspaceTitle");
+  const contentSearchButton = document.querySelector("#contentSearchButton");
+  const contentSearchBar = document.querySelector("#contentSearchBar");
+  const contentWorkSearch = document.querySelector("#contentWorkSearch");
+  const contentWorkMetrics = document.querySelector("#contentWorkMetrics");
+  const contentStageTabs = document.querySelector("#contentStageTabs");
+  const contentKanban = document.querySelector("#contentKanban");
+  const addContentButton = document.querySelector("#addContentButton");
+  const addIdeaButton = document.querySelector("#addIdeaButton");
+  const addPlannedContentButton = document.querySelector("#addPlannedContentButton");
+  const contentIdeasSearch = document.querySelector("#contentIdeasSearch");
+  const contentStatusFilter = document.querySelector("#contentStatusFilter");
+  const contentPlatformFilter = document.querySelector("#contentPlatformFilter");
+  const contentIdeasList = document.querySelector("#contentIdeasList");
+  const contentPlanSummary = document.querySelector("#contentPlanSummary");
+  const contentPlanList = document.querySelector("#contentPlanList");
+  const contentAnalyticsPeriod = document.querySelector("#contentAnalyticsPeriod");
+  const contentAnalyticsMetrics = document.querySelector("#contentAnalyticsMetrics");
+  const contentAnalyticsChart = document.querySelector("#contentAnalyticsChart");
+  const contentInsights = document.querySelector("#contentInsights");
+  const contentTopList = document.querySelector("#contentTopList");
+  const contentTemplateList = document.querySelector("#contentTemplateList");
+  const addContentTemplateButton = document.querySelector("#addContentTemplateButton");
+  const contentSpaceNameInput = document.querySelector("#contentSpaceNameInput");
+  const saveContentSpaceNameButton = document.querySelector("#saveContentSpaceName");
+  const contentPlatformSettings = document.querySelector("#contentPlatformSettings");
+  const newContentPlatform = document.querySelector("#newContentPlatform");
+  const addContentPlatformButton = document.querySelector("#addContentPlatform");
+  const contentPillarSettings = document.querySelector("#contentPillarSettings");
+  const newContentPillar = document.querySelector("#newContentPillar");
+  const addContentPillarButton = document.querySelector("#addContentPillar");
+  const resetContentSpaceButton = document.querySelector("#resetContentSpace");
+  const contentEditorModal = document.querySelector("#contentEditorModal");
+  const contentEditorBackdrop = document.querySelector("#contentEditorBackdrop");
+  const closeContentEditorButton = document.querySelector("#closeContentEditor");
+  const contentEditorTitle = document.querySelector("#contentEditorTitle");
+  const contentTitleInput = document.querySelector("#contentTitleInput");
+  const contentStageInput = document.querySelector("#contentStageInput");
+  const contentPlatformInput = document.querySelector("#contentPlatformInput");
+  const contentFormatInput = document.querySelector("#contentFormatInput");
+  const contentPillarInput = document.querySelector("#contentPillarInput");
+  const contentHookInput = document.querySelector("#contentHookInput");
+  const contentScriptInput = document.querySelector("#contentScriptInput");
+  const contentNextActionInput = document.querySelector("#contentNextActionInput");
+  const contentPublishDateInput = document.querySelector("#contentPublishDateInput");
+  const contentPublishTimeInput = document.querySelector("#contentPublishTimeInput");
+  const contentViewsInput = document.querySelector("#contentViewsInput");
+  const contentReachInput = document.querySelector("#contentReachInput");
+  const contentLikesInput = document.querySelector("#contentLikesInput");
+  const contentCommentsInput = document.querySelector("#contentCommentsInput");
+  const contentSharesInput = document.querySelector("#contentSharesInput");
+  const contentSavesInput = document.querySelector("#contentSavesInput");
+  const contentRetentionInput = document.querySelector("#contentRetentionInput");
+  const saveContentItemButton = document.querySelector("#saveContentItem");
+  const deleteContentItemButton = document.querySelector("#deleteContentItem");
+  const contentTemplateModal = document.querySelector("#contentTemplateModal");
+  const contentTemplateBackdrop = document.querySelector("#contentTemplateBackdrop");
+  const closeContentTemplateButton = document.querySelector("#closeContentTemplate");
+  const contentTemplateEditorTitle = document.querySelector("#contentTemplateEditorTitle");
+  const contentTemplateTitleInput = document.querySelector("#contentTemplateTitleInput");
+  const contentTemplateFormatInput = document.querySelector("#contentTemplateFormatInput");
+  const contentTemplateHookInput = document.querySelector("#contentTemplateHookInput");
+  const contentTemplateBodyInput = document.querySelector("#contentTemplateBodyInput");
+  const saveContentTemplateButton = document.querySelector("#saveContentTemplate");
+  const deleteContentTemplateButton = document.querySelector("#deleteContentTemplate");
 
   applyTheme(state.theme || "light");
   renderCalendarNavigation();
@@ -159,6 +240,7 @@
   renderProfilePhoto();
   renderAccount();
   renderReminderSettings();
+  initializeContentStudio();
   normalizeStoredProfilePhoto();
   startDateWatcher();
   openRequestedDay();
@@ -171,6 +253,33 @@
   if ("clearAppBadge" in navigator) navigator.clearAppBadge().catch(() => {});
 
   profileButton.addEventListener("click", openProfile);
+  planningSpaceButton.addEventListener("click", () => switchWorkspace("planning"));
+  contentSpaceButton.addEventListener("click", () => switchWorkspace("content"));
+  contentNavButtons.forEach((button) => button.addEventListener("click", () => showContentView(button.dataset.contentView)));
+  addContentButton.addEventListener("click", () => openContentEditor());
+  addIdeaButton.addEventListener("click", () => openContentEditor());
+  addPlannedContentButton.addEventListener("click", () => openContentEditor(null, { planned: true }));
+  contentSearchButton.addEventListener("click", toggleContentSearch);
+  contentWorkSearch.addEventListener("input", renderContentWork);
+  contentIdeasSearch.addEventListener("input", renderContentIdeas);
+  contentStatusFilter.addEventListener("change", renderContentIdeas);
+  contentPlatformFilter.addEventListener("change", renderContentIdeas);
+  contentAnalyticsPeriod.addEventListener("change", renderContentAnalytics);
+  contentEditorBackdrop.addEventListener("click", closeContentEditor);
+  closeContentEditorButton.addEventListener("click", closeContentEditor);
+  saveContentItemButton.addEventListener("click", saveContentItemFromEditor);
+  deleteContentItemButton.addEventListener("click", deleteContentItemFromEditor);
+  addContentTemplateButton.addEventListener("click", () => openContentTemplateEditor());
+  contentTemplateBackdrop.addEventListener("click", closeContentTemplateEditor);
+  closeContentTemplateButton.addEventListener("click", closeContentTemplateEditor);
+  saveContentTemplateButton.addEventListener("click", saveContentTemplateFromEditor);
+  deleteContentTemplateButton.addEventListener("click", deleteContentTemplateFromEditor);
+  saveContentSpaceNameButton.addEventListener("click", saveContentSpaceName);
+  addContentPlatformButton.addEventListener("click", () => addContentSetting("platform"));
+  addContentPillarButton.addEventListener("click", () => addContentSetting("pillar"));
+  newContentPlatform.addEventListener("keydown", (event) => { if (event.key === "Enter") addContentSetting("platform"); });
+  newContentPillar.addEventListener("keydown", (event) => { if (event.key === "Enter") addContentSetting("pillar"); });
+  resetContentSpaceButton.addEventListener("click", resetContentStudio);
   addCalendarButton.addEventListener("click", () => openCalendarEditor());
   settingsAddCalendarButton.addEventListener("click", () => openCalendarEditor());
   previousMonthButton.addEventListener("click", () => changeMonth(-1));
@@ -228,6 +337,14 @@
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
+    if (contentTemplateModal.classList.contains("is-open")) {
+      closeContentTemplateEditor();
+      return;
+    }
+    if (contentEditorModal.classList.contains("is-open")) {
+      closeContentEditor();
+      return;
+    }
     if (calendarEditorModal.classList.contains("is-open")) {
       closeCalendarEditor();
       return;
@@ -701,6 +818,110 @@
     ];
   }
 
+  function defaultContentTemplates() {
+    return [
+      {
+        id: "content-template-story",
+        title: "Личная история",
+        format: "Reels",
+        hook: "Я долго не рассказывал об этом, но...",
+        body: "1. Ситуация до изменения\n2. Момент, когда всё изменилось\n3. Что я сделал\n4. Результат и честный вывод",
+        system: true
+      },
+      {
+        id: "content-template-breakdown",
+        title: "Полезный разбор",
+        format: "Shorts",
+        hook: "Вот почему у тебя не получается...",
+        body: "1. Назвать проблему\n2. Показать типичную ошибку\n3. Дать 3 конкретных шага\n4. Короткий итог",
+        system: true
+      },
+      {
+        id: "content-template-challenge",
+        title: "Путь или челлендж",
+        format: "TikTok",
+        hook: "День 1: проверяю, смогу ли я...",
+        body: "1. Цель челленджа\n2. Что произошло сегодня\n3. Трудность или неожиданность\n4. Следующий шаг",
+        system: true
+      }
+    ];
+  }
+
+  function defaultContentStudio() {
+    return {
+      name: "Контент",
+      items: [],
+      templates: defaultContentTemplates(),
+      platforms: ["Reels", "TikTok", "Shorts", "YouTube"],
+      pillars: ["Личный опыт", "Дизайн", "Продукт", "Учёба"],
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  function normalizeContentStudio(value) {
+    const fallback = defaultContentStudio();
+    const source = value && typeof value === "object" ? value : {};
+    const validStages = new Set(contentStages.map((stage) => stage.id));
+    const items = Array.isArray(source.items) ? source.items : [];
+    const customTemplates = Array.isArray(source.templates)
+      ? source.templates.filter((template) => template && !template.system)
+      : [];
+    return {
+      name: String(source.name || fallback.name).trim().slice(0, 32) || fallback.name,
+      items: items.filter(Boolean).map((item) => ({
+        id: String(item.id || `content-${Date.now()}-${Math.random().toString(16).slice(2)}`),
+        title: String(item.title || "Без названия").trim().slice(0, 100),
+        stage: validStages.has(item.stage) ? item.stage : "idea",
+        platform: String(item.platform || fallback.platforms[0]),
+        format: String(item.format || "Reels"),
+        pillar: String(item.pillar || fallback.pillars[0]),
+        hook: String(item.hook || ""),
+        script: String(item.script || ""),
+        nextAction: String(item.nextAction || ""),
+        publishDate: /^\d{4}-\d{2}-\d{2}$/.test(item.publishDate || "") ? item.publishDate : "",
+        publishTime: /^\d{2}:\d{2}$/.test(item.publishTime || "") ? item.publishTime : "",
+        metrics: normalizeContentMetrics(item.metrics),
+        createdAt: item.createdAt || new Date().toISOString(),
+        updatedAt: item.updatedAt || new Date().toISOString()
+      })),
+      templates: [
+        ...defaultContentTemplates(),
+        ...customTemplates.map((template) => ({
+          id: String(template.id || `content-template-${Date.now()}-${Math.random().toString(16).slice(2)}`),
+          title: String(template.title || "Шаблон").trim().slice(0, 60),
+          format: String(template.format || "Reels"),
+          hook: String(template.hook || ""),
+          body: String(template.body || ""),
+          system: false,
+          updatedAt: template.updatedAt || new Date().toISOString()
+        }))
+      ],
+      platforms: normalizeContentTokens(source.platforms, fallback.platforms),
+      pillars: normalizeContentTokens(source.pillars, fallback.pillars),
+      updatedAt: source.updatedAt || new Date().toISOString()
+    };
+  }
+
+  function normalizeContentTokens(values, fallback) {
+    if (!Array.isArray(values)) return [...fallback];
+    const result = [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
+    return result.length ? result.slice(0, 20) : [...fallback];
+  }
+
+  function normalizeContentMetrics(metrics) {
+    const source = metrics && typeof metrics === "object" ? metrics : {};
+    const number = (value, max = Number.MAX_SAFE_INTEGER) => Math.min(max, Math.max(0, Number(value) || 0));
+    return {
+      views: number(source.views),
+      reach: number(source.reach),
+      likes: number(source.likes),
+      comments: number(source.comments),
+      shares: number(source.shares),
+      saves: number(source.saves),
+      retention: number(source.retention, 100)
+    };
+  }
+
   function calendars() {
     if (!Array.isArray(state.calendars) || !state.calendars.length) {
       state.calendars = defaultCalendars();
@@ -864,7 +1085,7 @@
     state.dayPlans = state.dayPlans && typeof state.dayPlans === "object" ? state.dayPlans : {};
     restoreLegacyLockedDays();
     migrateLegacyCalendarData(fallbackUpdatedAt);
-    state.schemaVersion = 32;
+    state.schemaVersion = 33;
     state.calendars = normalizeCalendars(state.calendars);
     state.activeCalendarId = calendarById(state.activeCalendarId || "tasks").id;
     state.taskTypes = normalizeTaskTypes(state.taskTypes);
@@ -873,6 +1094,9 @@
     state.reminderTimezone = state.reminderTimezone || detectedTimezone();
     state.remindersEnabled = Boolean(state.remindersEnabled);
     state.cloudRevision = Number(state.cloudRevision) || 0;
+    state.contentStudio = normalizeContentStudio(state.contentStudio);
+    state.contentStudioUpdatedAt = state.contentStudioUpdatedAt || state.contentStudio.updatedAt || fallbackUpdatedAt;
+    state.activeWorkspace = state.activeWorkspace === "content" ? "content" : "planning";
 
     calendars().forEach((calendar) => {
       const store = calendarStore(calendar.id);
@@ -2292,6 +2516,8 @@
     renderProfilePhoto();
     renderAccount();
     renderReminderSettings();
+    renderContentStudio();
+    switchWorkspace(state.activeWorkspace || "planning", { save: false });
     applyTheme(state.theme || "light");
     if (activeModal === "day") renderDay();
   }
@@ -2670,6 +2896,559 @@
     return { kind: "not-started", label: "Не начато" };
   }
 
+  function initializeContentStudio() {
+    renderContentFilters();
+    activeContentView = "work";
+    switchWorkspace(state.activeWorkspace || "planning", { save: false });
+    renderContentStudio();
+  }
+
+  function contentStudioState() {
+    state.contentStudio = normalizeContentStudio(state.contentStudio);
+    return state.contentStudio;
+  }
+
+  function switchWorkspace(workspace, options = {}) {
+    const isContent = workspace === "content";
+    state.activeWorkspace = isContent ? "content" : "planning";
+    planningSpace.hidden = isContent;
+    contentSpace.hidden = !isContent;
+    planningSpaceButton.classList.toggle("is-active", !isContent);
+    contentSpaceButton.classList.toggle("is-active", isContent);
+    planningSpaceButton.setAttribute("aria-selected", String(!isContent));
+    contentSpaceButton.setAttribute("aria-selected", String(isContent));
+    document.body.classList.toggle("is-content-space", isContent);
+    if (isContent) renderContentStudio();
+    if (options.save !== false) saveState({ skipCloud: true });
+  }
+
+  function showContentView(view) {
+    const known = new Set(["work", "ideas", "plan", "analytics", "templates", "settings"]);
+    activeContentView = known.has(view) ? view : "work";
+    contentNavButtons.forEach((button) => {
+      const active = button.dataset.contentView === activeContentView;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-current", active ? "page" : "false");
+    });
+    contentPages.forEach((page) => {
+      const active = page.dataset.contentPage === activeContentView;
+      page.hidden = !active;
+      page.classList.toggle("is-active", active);
+    });
+    renderContentView();
+  }
+
+  function renderContentStudio() {
+    const studio = contentStudioState();
+    contentWorkspaceTitle.textContent = studio.name;
+    contentSpaceNameInput.value = studio.name;
+    renderContentFilters();
+    renderContentView();
+  }
+
+  function renderContentView() {
+    if (activeContentView === "work") renderContentWork();
+    if (activeContentView === "ideas") renderContentIdeas();
+    if (activeContentView === "plan") renderContentPlan();
+    if (activeContentView === "analytics") renderContentAnalytics();
+    if (activeContentView === "templates") renderContentTemplates();
+    if (activeContentView === "settings") renderContentSettings();
+  }
+
+  function renderContentFilters() {
+    const studio = contentStudioState();
+    const currentStage = contentStageInput.value;
+    const currentPlatform = contentPlatformInput.value;
+    const currentPillar = contentPillarInput.value;
+    const statusFilter = contentStatusFilter.value;
+    const platformFilter = contentPlatformFilter.value;
+    contentStageInput.innerHTML = contentStages.map((stage) => `<option value="${stage.id}">${stage.name}</option>`).join("");
+    contentStatusFilter.innerHTML = `<option value="all">Все этапы</option>${contentStages.map((stage) => `<option value="${stage.id}">${stage.name}</option>`).join("")}`;
+    contentPlatformInput.innerHTML = studio.platforms.map((platform) => `<option>${escapeHtml(platform)}</option>`).join("");
+    contentPlatformFilter.innerHTML = `<option value="all">Все платформы</option>${studio.platforms.map((platform) => `<option>${escapeHtml(platform)}</option>`).join("")}`;
+    contentPillarInput.innerHTML = studio.pillars.map((pillar) => `<option>${escapeHtml(pillar)}</option>`).join("");
+    if (contentStages.some((stage) => stage.id === currentStage)) contentStageInput.value = currentStage;
+    if (studio.platforms.includes(currentPlatform)) contentPlatformInput.value = currentPlatform;
+    if (studio.pillars.includes(currentPillar)) contentPillarInput.value = currentPillar;
+    if (["all", ...contentStages.map((stage) => stage.id)].includes(statusFilter)) contentStatusFilter.value = statusFilter;
+    if (["all", ...studio.platforms].includes(platformFilter)) contentPlatformFilter.value = platformFilter;
+  }
+
+  function renderContentWork() {
+    const studio = contentStudioState();
+    const query = contentWorkSearch.value.trim().toLowerCase();
+    const items = studio.items.filter((item) => contentMatchesQuery(item, query));
+    const published = studio.items.filter((item) => item.stage === "published");
+    const views = published.reduce((sum, item) => sum + item.metrics.views, 0);
+    renderContentMetricCards(contentWorkMetrics, [
+      ["Идей", studio.items.filter((item) => item.stage === "idea").length, true],
+      ["В работе", studio.items.filter((item) => ["preparation", "production"].includes(item.stage)).length, false],
+      ["Опубликовано", published.length, false],
+      ["Просмотры", formatContentNumber(views), true]
+    ]);
+    if (!activeMobileContentStage) {
+      activeMobileContentStage = contentStages.find((stage) => items.some((item) => item.stage === stage.id))?.id || "idea";
+    }
+    contentStageTabs.innerHTML = contentStages.map((stage) => `<button class="${stage.id === activeMobileContentStage ? "is-active" : ""}" type="button" data-content-stage-tab="${stage.id}">${stage.name}</button>`).join("");
+    contentStageTabs.querySelectorAll("[data-content-stage-tab]").forEach((button) => button.addEventListener("click", () => {
+      activeMobileContentStage = button.dataset.contentStageTab;
+      renderContentWork();
+    }));
+    contentKanban.innerHTML = "";
+    contentStages.forEach((stage) => {
+      const stageItems = items.filter((item) => item.stage === stage.id);
+      const column = document.createElement("section");
+      column.className = `content-column ${stage.id === activeMobileContentStage ? "is-mobile-active" : ""}`;
+      column.innerHTML = `<header class="content-column-header"><span>${stage.name}</span><span class="content-count">${stageItems.length}</span></header><div class="content-column-list"></div>`;
+      const list = column.querySelector(".content-column-list");
+      if (!stageItems.length) {
+        list.innerHTML = `<p class="content-empty-state">${query ? "Ничего не найдено" : "Здесь пока пусто"}</p>`;
+      } else {
+        stageItems.sort(contentUpdatedSort).forEach((item) => list.appendChild(createContentCard(item)));
+      }
+      contentKanban.appendChild(column);
+    });
+  }
+
+  function createContentCard(item) {
+    const button = document.createElement("button");
+    button.className = "content-card";
+    button.type = "button";
+    const detail = item.nextAction || item.hook || "Открой и добавь следующий шаг";
+    button.innerHTML = `
+      <span class="content-card-top"><span class="content-stage-chip">${escapeHtml(item.format || item.platform)}</span><span aria-hidden="true">•••</span></span>
+      <h3>${escapeHtml(item.title)}</h3>
+      <p>${escapeHtml(detail)}</p>
+      ${item.stage === "published" ? `<span class="content-card-result">${formatContentNumber(item.metrics.views)} просмотров</span>` : ""}
+    `;
+    button.addEventListener("click", () => openContentEditor(item.id));
+    return button;
+  }
+
+  function renderContentIdeas() {
+    const studio = contentStudioState();
+    const query = contentIdeasSearch.value.trim().toLowerCase();
+    const stage = contentStatusFilter.value || "all";
+    const platform = contentPlatformFilter.value || "all";
+    const items = studio.items
+      .filter((item) => contentMatchesQuery(item, query))
+      .filter((item) => stage === "all" || item.stage === stage)
+      .filter((item) => platform === "all" || item.platform === platform)
+      .sort(contentUpdatedSort);
+    contentIdeasList.innerHTML = "";
+    if (!items.length) {
+      contentIdeasList.innerHTML = `<p class="content-empty-state">Идей по этим условиям пока нет.</p>`;
+      return;
+    }
+    items.forEach((item) => {
+      const row = document.createElement("article");
+      row.className = "content-idea-row";
+      row.tabIndex = 0;
+      row.innerHTML = `
+        <div class="content-row-meta"><span class="content-stage-chip">${contentStageName(item.stage)}</span><span>${escapeHtml(item.platform)}</span><span>${escapeHtml(item.pillar)}</span></div>
+        <h3>${escapeHtml(item.title)}</h3>
+        <p>${escapeHtml(item.hook || item.nextAction || "Добавь хук и следующий шаг")}</p>
+      `;
+      row.addEventListener("click", () => openContentEditor(item.id));
+      row.addEventListener("keydown", (event) => { if (event.key === "Enter") openContentEditor(item.id); });
+      contentIdeasList.appendChild(row);
+    });
+  }
+
+  function renderContentPlan() {
+    const studio = contentStudioState();
+    const planned = studio.items.filter((item) => item.publishDate).sort((a, b) => `${a.publishDate}${a.publishTime}`.localeCompare(`${b.publishDate}${b.publishTime}`));
+    const todayKey = formatKey(new Date());
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const nextWeekKey = formatKey(nextWeek);
+    renderContentMetricCards(contentPlanSummary, [
+      ["Запланировано", planned.filter((item) => item.stage !== "published").length, true],
+      ["Ближайшие 7 дней", planned.filter((item) => item.publishDate >= todayKey && item.publishDate <= nextWeekKey && item.stage !== "published").length, false],
+      ["Без даты", studio.items.filter((item) => item.stage !== "published" && !item.publishDate).length, false]
+    ]);
+    contentPlanList.innerHTML = "";
+    if (!planned.length) {
+      contentPlanList.innerHTML = `<p class="content-empty-state">Укажи дату публикации в карточке ролика — он появится здесь.</p>`;
+      return;
+    }
+    planned.forEach((item) => {
+      const row = document.createElement("article");
+      row.className = "content-plan-item";
+      row.tabIndex = 0;
+      row.innerHTML = `
+        <time class="content-plan-date" datetime="${item.publishDate}">${formatContentDate(item.publishDate)}${item.publishTime ? `<br>${escapeHtml(item.publishTime)}` : ""}</time>
+        <div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.platform)} · ${escapeHtml(item.format)} · ${escapeHtml(item.pillar)}</p></div>
+        <span class="content-plan-status">${contentStageName(item.stage)}</span>
+      `;
+      row.addEventListener("click", () => openContentEditor(item.id));
+      row.addEventListener("keydown", (event) => { if (event.key === "Enter") openContentEditor(item.id); });
+      contentPlanList.appendChild(row);
+    });
+  }
+
+  function renderContentAnalytics() {
+    const period = contentAnalyticsPeriod.value || "30";
+    const published = contentStudioState().items
+      .filter((item) => item.stage === "published")
+      .filter((item) => contentItemInPeriod(item, period));
+    const totals = published.reduce((sum, item) => {
+      Object.keys(sum).forEach((key) => { sum[key] += Number(item.metrics[key]) || 0; });
+      return sum;
+    }, { views: 0, reach: 0, likes: 0, comments: 0, shares: 0, saves: 0, retention: 0 });
+    const interactions = totals.likes + totals.comments + totals.shares + totals.saves;
+    const engagement = totals.views ? (interactions / totals.views) * 100 : 0;
+    const retention = published.length ? totals.retention / published.length : 0;
+    renderContentMetricCards(contentAnalyticsMetrics, [
+      ["Просмотры", formatContentNumber(totals.views), true],
+      ["Охват", formatContentNumber(totals.reach), false],
+      ["Вовлечённость", `${formatContentDecimal(engagement)}%`, true],
+      ["Средний досмотр", `${formatContentDecimal(retention)}%`, false]
+    ]);
+    renderContentChart(published);
+    renderContentInsights(published);
+    renderContentTopList(published);
+  }
+
+  function renderContentChart(items) {
+    const sorted = [...items].sort((a, b) => (a.publishDate || a.createdAt).localeCompare(b.publishDate || b.createdAt)).slice(-12);
+    const max = Math.max(0, ...sorted.map((item) => item.metrics.views));
+    if (!sorted.length || max === 0) {
+      contentAnalyticsChart.innerHTML = `<p class="content-empty-state">Добавь просмотры опубликованным роликам, чтобы увидеть график.</p>`;
+      return;
+    }
+    contentAnalyticsChart.innerHTML = sorted.map((item) => {
+      const height = Math.max(8, Math.round((item.metrics.views / max) * 100));
+      const top = item.metrics.views === max ? "is-top" : "";
+      return `<button class="content-chart-bar ${top}" type="button" style="height:${height}%" data-content-id="${escapeAttribute(item.id)}" aria-label="${escapeAttribute(item.title)}, ${item.metrics.views} просмотров"><span>${formatContentNumber(item.metrics.views)}</span></button>`;
+    }).join("");
+    contentAnalyticsChart.querySelectorAll("[data-content-id]").forEach((button) => button.addEventListener("click", () => openContentEditor(button.dataset.contentId)));
+  }
+
+  function renderContentInsights(items) {
+    if (!items.length) {
+      contentInsights.innerHTML = `<p class="content-empty-state">После первой публикации здесь появятся выводы.</p>`;
+      return;
+    }
+    const bestFormat = bestContentGroup(items, "format");
+    const bestPlatform = bestContentGroup(items, "platform");
+    const bestRetention = [...items].sort((a, b) => b.metrics.retention - a.metrics.retention)[0];
+    const insights = [
+      ["ЛУЧШИЙ ФОРМАТ", `${bestFormat.name}: в среднем ${formatContentNumber(bestFormat.average)} просмотров.`],
+      ["СИЛЬНАЯ ПЛАТФОРМА", `${bestPlatform.name}: лучший средний результат.`],
+      ["ЛУЧШИЙ ДОСМОТР", bestRetention.metrics.retention ? `«${bestRetention.title}» — ${formatContentDecimal(bestRetention.metrics.retention)}%.` : "Добавь процент досмотра в опубликованные ролики."]
+    ];
+    contentInsights.innerHTML = insights.map(([title, copy]) => `<div class="content-insight"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(copy)}</p></div>`).join("");
+  }
+
+  function renderContentTopList(items) {
+    const top = [...items].sort((a, b) => b.metrics.views - a.metrics.views).slice(0, 5);
+    if (!top.length) {
+      contentTopList.innerHTML = `<p class="content-empty-state">Опубликованные ролики появятся здесь.</p>`;
+      return;
+    }
+    contentTopList.innerHTML = top.map((item) => `
+      <button class="content-top-row" type="button" data-content-id="${escapeAttribute(item.id)}">
+        <strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.platform)}</span><span class="is-accent">${formatContentNumber(item.metrics.views)}</span><span>${formatContentDecimal(item.metrics.retention)}%</span>
+      </button>
+    `).join("");
+    contentTopList.querySelectorAll("[data-content-id]").forEach((button) => button.addEventListener("click", () => openContentEditor(button.dataset.contentId)));
+  }
+
+  function renderContentTemplates() {
+    const templates = contentStudioState().templates;
+    contentTemplateList.innerHTML = "";
+    templates.forEach((template) => {
+      const card = document.createElement("article");
+      card.className = "content-template-card";
+      card.innerHTML = `
+        <div class="content-template-top"><span class="content-stage-chip">${escapeHtml(template.format)}</span><span>${template.system ? "Встроенный" : "Мой шаблон"}</span></div>
+        <h3>${escapeHtml(template.title)}</h3>
+        <p>${escapeHtml(template.hook || template.body)}</p>
+        <div class="content-template-actions"><button class="content-primary-button" type="button" data-use-template="${escapeAttribute(template.id)}">Использовать</button>${template.system ? "" : `<button class="content-secondary-button" type="button" data-edit-template="${escapeAttribute(template.id)}" aria-label="Изменить шаблон">Изменить</button>`}</div>
+      `;
+      card.querySelector("[data-use-template]").addEventListener("click", () => useContentTemplate(template.id));
+      const editButton = card.querySelector("[data-edit-template]");
+      if (editButton) editButton.addEventListener("click", () => openContentTemplateEditor(template.id));
+      contentTemplateList.appendChild(card);
+    });
+  }
+
+  function renderContentSettings() {
+    const studio = contentStudioState();
+    contentSpaceNameInput.value = studio.name;
+    renderContentTokenSettings(contentPlatformSettings, studio.platforms, "platform");
+    renderContentTokenSettings(contentPillarSettings, studio.pillars, "pillar");
+  }
+
+  function renderContentTokenSettings(container, values, kind) {
+    container.innerHTML = values.map((value) => `<span class="content-token">${escapeHtml(value)}<button type="button" data-remove-content-setting="${kind}" data-value="${escapeAttribute(value)}" aria-label="Удалить ${escapeAttribute(value)}">×</button></span>`).join("");
+    container.querySelectorAll("[data-remove-content-setting]").forEach((button) => button.addEventListener("click", () => removeContentSetting(button.dataset.removeContentSetting, button.dataset.value)));
+  }
+
+  function toggleContentSearch() {
+    contentSearchBar.hidden = !contentSearchBar.hidden;
+    if (!contentSearchBar.hidden) contentWorkSearch.focus();
+  }
+
+  function openContentEditor(id = null, options = {}) {
+    const studio = contentStudioState();
+    const existing = id ? studio.items.find((item) => item.id === id) : null;
+    const template = options.template || null;
+    editingContentId = existing ? existing.id : null;
+    renderContentFilters();
+    contentEditorTitle.textContent = existing ? "Изменить ролик" : "Новая идея";
+    contentTitleInput.value = existing?.title || "";
+    contentStageInput.value = existing?.stage || "idea";
+    contentPlatformInput.value = existing?.platform || studio.platforms[0];
+    contentFormatInput.value = existing?.format || template?.format || "Reels";
+    contentPillarInput.value = existing?.pillar || studio.pillars[0];
+    contentHookInput.value = existing?.hook || template?.hook || "";
+    contentScriptInput.value = existing?.script || template?.body || "";
+    contentNextActionInput.value = existing?.nextAction || "";
+    contentPublishDateInput.value = existing?.publishDate || (options.planned ? formatKey(new Date()) : "");
+    contentPublishTimeInput.value = existing?.publishTime || "";
+    const metrics = normalizeContentMetrics(existing?.metrics);
+    contentViewsInput.value = metrics.views || "";
+    contentReachInput.value = metrics.reach || "";
+    contentLikesInput.value = metrics.likes || "";
+    contentCommentsInput.value = metrics.comments || "";
+    contentSharesInput.value = metrics.shares || "";
+    contentSavesInput.value = metrics.saves || "";
+    contentRetentionInput.value = metrics.retention || "";
+    deleteContentItemButton.hidden = !existing;
+    contentEditorModal.classList.add("is-open");
+    contentEditorModal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+    requestAnimationFrame(() => contentTitleInput.focus());
+  }
+
+  function closeContentEditor() {
+    contentEditorModal.classList.remove("is-open");
+    contentEditorModal.setAttribute("aria-hidden", "true");
+    editingContentId = null;
+    if (!contentTemplateModal.classList.contains("is-open")) document.body.classList.remove("modal-open");
+  }
+
+  function saveContentItemFromEditor() {
+    const title = contentTitleInput.value.trim();
+    if (!title) {
+      contentTitleInput.focus();
+      contentTitleInput.setCustomValidity("Напиши название ролика");
+      contentTitleInput.reportValidity();
+      contentTitleInput.setCustomValidity("");
+      return;
+    }
+    const studio = contentStudioState();
+    const existing = editingContentId ? studio.items.find((item) => item.id === editingContentId) : null;
+    const timestamp = new Date().toISOString();
+    const item = {
+      id: existing?.id || `content-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title: title.slice(0, 100),
+      stage: contentStageInput.value,
+      platform: contentPlatformInput.value,
+      format: contentFormatInput.value,
+      pillar: contentPillarInput.value,
+      hook: contentHookInput.value.trim(),
+      script: contentScriptInput.value.trim(),
+      nextAction: contentNextActionInput.value.trim().slice(0, 140),
+      publishDate: contentPublishDateInput.value,
+      publishTime: contentPublishTimeInput.value,
+      metrics: normalizeContentMetrics({
+        views: contentViewsInput.value,
+        reach: contentReachInput.value,
+        likes: contentLikesInput.value,
+        comments: contentCommentsInput.value,
+        shares: contentSharesInput.value,
+        saves: contentSavesInput.value,
+        retention: contentRetentionInput.value
+      }),
+      createdAt: existing?.createdAt || timestamp,
+      updatedAt: timestamp
+    };
+    if (item.stage === "published" && !item.publishDate) item.publishDate = formatKey(new Date());
+    if (existing) Object.assign(existing, item);
+    else studio.items.push(item);
+    activeMobileContentStage = item.stage;
+    saveContentStudioChanges();
+    closeContentEditor();
+  }
+
+  function deleteContentItemFromEditor() {
+    if (!editingContentId) return;
+    const studio = contentStudioState();
+    const item = studio.items.find((entry) => entry.id === editingContentId);
+    if (!item || !window.confirm(`Удалить «${item.title}»?`)) return;
+    studio.items = studio.items.filter((entry) => entry.id !== editingContentId);
+    saveContentStudioChanges();
+    closeContentEditor();
+  }
+
+  function openContentTemplateEditor(id = null) {
+    const template = id ? contentStudioState().templates.find((entry) => entry.id === id && !entry.system) : null;
+    editingContentTemplateId = template?.id || null;
+    contentTemplateEditorTitle.textContent = template ? "Изменить шаблон" : "Новый шаблон";
+    contentTemplateTitleInput.value = template?.title || "";
+    contentTemplateFormatInput.value = template?.format || "Reels";
+    contentTemplateHookInput.value = template?.hook || "";
+    contentTemplateBodyInput.value = template?.body || "";
+    deleteContentTemplateButton.hidden = !template;
+    contentTemplateModal.classList.add("is-open");
+    contentTemplateModal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+    requestAnimationFrame(() => contentTemplateTitleInput.focus());
+  }
+
+  function closeContentTemplateEditor() {
+    contentTemplateModal.classList.remove("is-open");
+    contentTemplateModal.setAttribute("aria-hidden", "true");
+    editingContentTemplateId = null;
+    if (!contentEditorModal.classList.contains("is-open")) document.body.classList.remove("modal-open");
+  }
+
+  function saveContentTemplateFromEditor() {
+    const title = contentTemplateTitleInput.value.trim();
+    if (!title) {
+      contentTemplateTitleInput.focus();
+      return;
+    }
+    const studio = contentStudioState();
+    const existing = editingContentTemplateId ? studio.templates.find((entry) => entry.id === editingContentTemplateId && !entry.system) : null;
+    const template = {
+      id: existing?.id || `content-template-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title: title.slice(0, 60),
+      format: contentTemplateFormatInput.value,
+      hook: contentTemplateHookInput.value.trim(),
+      body: contentTemplateBodyInput.value.trim(),
+      system: false,
+      updatedAt: new Date().toISOString()
+    };
+    if (existing) Object.assign(existing, template);
+    else studio.templates.push(template);
+    saveContentStudioChanges();
+    closeContentTemplateEditor();
+  }
+
+  function deleteContentTemplateFromEditor() {
+    if (!editingContentTemplateId) return;
+    const studio = contentStudioState();
+    const template = studio.templates.find((entry) => entry.id === editingContentTemplateId && !entry.system);
+    if (!template || !window.confirm(`Удалить шаблон «${template.title}»?`)) return;
+    studio.templates = studio.templates.filter((entry) => entry.id !== editingContentTemplateId);
+    saveContentStudioChanges();
+    closeContentTemplateEditor();
+  }
+
+  function useContentTemplate(id) {
+    const template = contentStudioState().templates.find((entry) => entry.id === id);
+    if (!template) return;
+    openContentEditor(null, { template });
+  }
+
+  function saveContentSpaceName() {
+    const name = contentSpaceNameInput.value.trim().slice(0, 32);
+    if (!name) {
+      contentSpaceNameInput.focus();
+      return;
+    }
+    contentStudioState().name = name;
+    saveContentStudioChanges();
+  }
+
+  function addContentSetting(kind) {
+    const studio = contentStudioState();
+    const isPlatform = kind === "platform";
+    const input = isPlatform ? newContentPlatform : newContentPillar;
+    const key = isPlatform ? "platforms" : "pillars";
+    const value = input.value.trim().slice(0, isPlatform ? 20 : 24);
+    if (!value) {
+      input.focus();
+      return;
+    }
+    if (!studio[key].some((entry) => entry.toLowerCase() === value.toLowerCase())) studio[key].push(value);
+    input.value = "";
+    saveContentStudioChanges();
+  }
+
+  function removeContentSetting(kind, value) {
+    const studio = contentStudioState();
+    const key = kind === "platform" ? "platforms" : "pillars";
+    if (studio[key].length <= 1) return;
+    studio[key] = studio[key].filter((entry) => entry !== value);
+    saveContentStudioChanges();
+  }
+
+  function resetContentStudio() {
+    if (!window.confirm("Очистить идеи, аналитику и пользовательские шаблоны контент-пространства? Календари останутся без изменений.")) return;
+    state.contentStudio = defaultContentStudio();
+    saveContentStudioChanges();
+    showContentView("work");
+  }
+
+  function saveContentStudioChanges() {
+    const updatedAt = new Date().toISOString();
+    contentStudioState().updatedAt = updatedAt;
+    state.contentStudioUpdatedAt = updatedAt;
+    saveState();
+    renderContentStudio();
+  }
+
+  function renderContentMetricCards(container, values) {
+    container.innerHTML = values.map(([label, value, accent]) => `<article class="content-metric-card ${accent ? "is-accent" : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("");
+  }
+
+  function contentMatchesQuery(item, query) {
+    if (!query) return true;
+    return [item.title, item.platform, item.format, item.pillar, item.hook, item.script, item.nextAction]
+      .some((value) => String(value || "").toLowerCase().includes(query));
+  }
+
+  function contentUpdatedSort(a, b) {
+    return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+  }
+
+  function contentStageName(id) {
+    return contentStages.find((stage) => stage.id === id)?.name || "Идея";
+  }
+
+  function formatContentNumber(value) {
+    const number = Number(value) || 0;
+    if (number < 1000) return String(Math.round(number));
+    return new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 1 }).format(number);
+  }
+
+  function formatContentDecimal(value) {
+    return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 }).format(Number(value) || 0);
+  }
+
+  function formatContentDate(key) {
+    const parts = String(key || "").split("-").map(Number);
+    if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return "Без даты";
+    return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(parts[0], parts[1] - 1, parts[2]));
+  }
+
+  function contentItemInPeriod(item, period) {
+    if (period === "all") return true;
+    const source = item.publishDate ? new Date(`${item.publishDate}T12:00:00`) : new Date(item.createdAt);
+    const threshold = new Date();
+    threshold.setDate(threshold.getDate() - Number(period || 30));
+    return Number.isFinite(source.getTime()) && source >= threshold;
+  }
+
+  function bestContentGroup(items, key) {
+    const groups = new Map();
+    items.forEach((item) => {
+      const name = item[key] || "Не указано";
+      const current = groups.get(name) || { total: 0, count: 0 };
+      current.total += item.metrics.views;
+      current.count += 1;
+      groups.set(name, current);
+    });
+    return [...groups.entries()]
+      .map(([name, value]) => ({ name, average: value.count ? value.total / value.count : 0 }))
+      .sort((a, b) => b.average - a.average)[0] || { name: "Нет данных", average: 0 };
+  }
+
   function escapeAttribute(value) {
     return String(value || "")
       .replace(/&/g, "&amp;")
@@ -2771,7 +3550,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=36").then((registration) => registration.update()).catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=37").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();
