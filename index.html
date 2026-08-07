@@ -21,7 +21,7 @@
     <link rel="icon" href="icon.ico?v=30" sizes="any">
     <link rel="apple-touch-icon" href="apple-touch-icon.png?v=30">
     <link rel="manifest" href="manifest.webmanifest?v=30">
-    <link rel="stylesheet" href="styles.css?v=36">
+    <link rel="stylesheet" href="styles.css?v=37">
   </head>
   <body>
     <div class="auth-screen" id="authScreen" aria-live="polite">
@@ -77,9 +77,13 @@
 
     <main class="app-shell">
       <header class="topbar">
-        <div>
+        <div class="brand-copy">
           <h1>Crest</h1>
           <p class="eyebrow">Личный планировщик</p>
+        </div>
+        <div class="workspace-switcher" role="tablist" aria-label="Пространство Crest">
+          <button class="workspace-switch is-active" id="planningSpaceButton" type="button" role="tab" aria-selected="true">Планирование</button>
+          <button class="workspace-switch" id="contentSpaceButton" type="button" role="tab" aria-selected="false">Контент</button>
         </div>
         <button class="icon-button profile-button" id="profileButton" type="button" aria-label="Открыть профиль" title="Профиль">
           <img id="profileButtonPhoto" alt="" hidden>
@@ -90,7 +94,7 @@
         </button>
       </header>
 
-      <div class="calendar-layout">
+      <div class="calendar-layout" id="planningSpace">
         <nav class="calendar-rail" aria-label="Мои календари">
           <div class="calendar-tabs" id="calendarTabs"></div>
           <button class="calendar-add-button" id="addCalendarButton" type="button" aria-label="Добавить календарь" title="Добавить календарь">
@@ -147,6 +151,125 @@
           <span class="knight-diamond knight-diamond-bottom" aria-hidden="true"><i></i></span>
         </section>
       </div>
+
+      <section class="content-space" id="contentSpace" aria-label="Контент-студия" hidden>
+        <aside class="content-sidebar" aria-label="Разделы контент-студии">
+          <p class="content-sidebar-label">КОНТЕНТ</p>
+          <nav class="content-navigation">
+            <button class="content-nav-button is-active" type="button" data-content-view="work">В работе</button>
+            <button class="content-nav-button" type="button" data-content-view="ideas">Все идеи</button>
+            <button class="content-nav-button" type="button" data-content-view="plan">Контент-план</button>
+            <button class="content-nav-button" type="button" data-content-view="analytics">Аналитика</button>
+            <button class="content-nav-button" type="button" data-content-view="templates">Шаблоны</button>
+            <button class="content-nav-button content-settings-link" type="button" data-content-view="settings">Настройки пространства</button>
+          </nav>
+        </aside>
+
+        <div class="content-main">
+          <section class="content-page is-active" data-content-page="work">
+            <header class="content-page-header">
+              <div>
+                <p class="content-kicker">КОНТЕНТ-СТУДИЯ</p>
+                <h2 id="contentWorkspaceTitle">Контент</h2>
+                <p>От идеи до публикации — отдельно от календаря.</p>
+              </div>
+              <div class="content-header-actions">
+                <button class="content-secondary-button" id="contentSearchButton" type="button" aria-label="Открыть поиск">Поиск</button>
+                <button class="content-primary-button" id="addContentButton" type="button">+ Новая идея</button>
+              </div>
+            </header>
+            <div class="content-search-bar" id="contentSearchBar" hidden>
+              <input id="contentWorkSearch" type="search" autocomplete="off" placeholder="Поиск по названию, хуку или платформе">
+            </div>
+            <div class="content-metrics" id="contentWorkMetrics"></div>
+            <div class="content-stage-tabs" id="contentStageTabs" aria-label="Этап производства"></div>
+            <div class="content-kanban" id="contentKanban"></div>
+          </section>
+
+          <section class="content-page" data-content-page="ideas" hidden>
+            <header class="content-page-header">
+              <div><p class="content-kicker">БИБЛИОТЕКА</p><h2>Все идеи</h2><p>Единая база роликов на любом этапе.</p></div>
+              <button class="content-primary-button" id="addIdeaButton" type="button">+ Новая идея</button>
+            </header>
+            <div class="content-toolbar">
+              <input id="contentIdeasSearch" type="search" autocomplete="off" placeholder="Найти идею">
+              <select id="contentStatusFilter" aria-label="Фильтр по этапу"></select>
+              <select id="contentPlatformFilter" aria-label="Фильтр по платформе"></select>
+            </div>
+            <div class="content-ideas-list" id="contentIdeasList"></div>
+          </section>
+
+          <section class="content-page" data-content-page="plan" hidden>
+            <header class="content-page-header">
+              <div><p class="content-kicker">ПУБЛИКАЦИИ</p><h2>Контент-план</h2><p>План выхода роликов, не связанный с календарём задач.</p></div>
+              <button class="content-primary-button" id="addPlannedContentButton" type="button">+ Запланировать</button>
+            </header>
+            <div class="content-plan-summary" id="contentPlanSummary"></div>
+            <div class="content-plan-list" id="contentPlanList"></div>
+          </section>
+
+          <section class="content-page" data-content-page="analytics" hidden>
+            <header class="content-page-header">
+              <div><p class="content-kicker">РЕЗУЛЬТАТЫ</p><h2>Аналитика контента</h2><p>Цифры, которые помогают решить, что снимать дальше.</p></div>
+              <select class="content-period-select" id="contentAnalyticsPeriod" aria-label="Период аналитики">
+                <option value="30">Последние 30 дней</option>
+                <option value="90">Последние 90 дней</option>
+                <option value="all">За всё время</option>
+              </select>
+            </header>
+            <div class="content-metrics analytics-metrics" id="contentAnalyticsMetrics"></div>
+            <div class="content-analytics-grid">
+              <section class="content-analytics-panel">
+                <div class="content-panel-heading"><h3>Просмотры роликов</h3><span>По публикациям</span></div>
+                <div class="content-chart" id="contentAnalyticsChart"></div>
+              </section>
+              <section class="content-analytics-panel content-insights-panel">
+                <div class="content-panel-heading"><h3>Что работает</h3><span>Автоматические выводы</span></div>
+                <div class="content-insights" id="contentInsights"></div>
+              </section>
+            </div>
+            <section class="content-analytics-panel content-top-panel">
+              <div class="content-panel-heading"><h3>Лучшие ролики</h3><span>Нажми, чтобы открыть</span></div>
+              <div class="content-top-list" id="contentTopList"></div>
+            </section>
+          </section>
+
+          <section class="content-page" data-content-page="templates" hidden>
+            <header class="content-page-header">
+              <div><p class="content-kicker">ЗАГОТОВКИ</p><h2>Шаблоны</h2><p>Повторяемые структуры, чтобы быстрее начать ролик.</p></div>
+              <button class="content-primary-button" id="addContentTemplateButton" type="button">+ Новый шаблон</button>
+            </header>
+            <div class="content-template-list" id="contentTemplateList"></div>
+          </section>
+
+          <section class="content-page" data-content-page="settings" hidden>
+            <header class="content-page-header">
+              <div><p class="content-kicker">ПРОСТРАНСТВО</p><h2>Настройки контента</h2><p>Названия и категории, которые нужны именно тебе.</p></div>
+            </header>
+            <div class="content-settings-grid">
+              <section class="content-settings-section">
+                <h3>Название пространства</h3>
+                <div class="content-inline-form"><input id="contentSpaceNameInput" type="text" maxlength="32" autocomplete="off"><button class="content-primary-button" id="saveContentSpaceName" type="button">Сохранить</button></div>
+              </section>
+              <section class="content-settings-section">
+                <h3>Платформы</h3>
+                <div class="content-token-list" id="contentPlatformSettings"></div>
+                <div class="content-inline-form"><input id="newContentPlatform" type="text" maxlength="20" autocomplete="off" placeholder="Новая платформа"><button class="content-secondary-button" id="addContentPlatform" type="button">Добавить</button></div>
+              </section>
+              <section class="content-settings-section">
+                <h3>Рубрики</h3>
+                <div class="content-token-list" id="contentPillarSettings"></div>
+                <div class="content-inline-form"><input id="newContentPillar" type="text" maxlength="24" autocomplete="off" placeholder="Новая рубрика"><button class="content-secondary-button" id="addContentPillar" type="button">Добавить</button></div>
+              </section>
+              <section class="content-settings-section content-danger-zone">
+                <h3>Данные пространства</h3>
+                <p>Удалит только идеи, шаблоны и аналитику контента. Календари не изменятся.</p>
+                <button class="content-danger-button" id="resetContentSpace" type="button">Очистить контент-пространство</button>
+              </section>
+            </div>
+          </section>
+        </div>
+      </section>
     </main>
 
     <div class="profile-modal" id="profileModal" aria-hidden="true">
@@ -464,7 +587,62 @@
       </section>
     </div>
 
+    <div class="content-editor-modal" id="contentEditorModal" aria-hidden="true">
+      <button class="content-modal-backdrop" id="contentEditorBackdrop" type="button" aria-label="Закрыть редактор ролика"></button>
+      <section class="content-editor-panel" role="dialog" aria-modal="true" aria-labelledby="contentEditorTitle">
+        <header class="content-editor-header">
+          <div><p class="content-kicker">РОЛИК</p><h2 id="contentEditorTitle">Новая идея</h2></div>
+          <button class="content-close-button" id="closeContentEditor" type="button" aria-label="Закрыть" title="Закрыть">×</button>
+        </header>
+        <div class="content-editor-form">
+          <label class="content-field content-field-wide"><span>Название</span><input id="contentTitleInput" type="text" maxlength="100" autocomplete="off" placeholder="О чём будет ролик"></label>
+          <label class="content-field"><span>Этап</span><select id="contentStageInput"></select></label>
+          <label class="content-field"><span>Платформа</span><select id="contentPlatformInput"></select></label>
+          <label class="content-field"><span>Формат</span><select id="contentFormatInput"><option>Reels</option><option>TikTok</option><option>Shorts</option><option>Видео</option><option>Карусель</option><option>Пост</option></select></label>
+          <label class="content-field"><span>Рубрика</span><select id="contentPillarInput"></select></label>
+          <label class="content-field content-field-wide"><span>Хук</span><textarea id="contentHookInput" rows="2" placeholder="Первая фраза или кадр"></textarea></label>
+          <label class="content-field content-field-wide"><span>Сценарий и заметки</span><textarea id="contentScriptInput" rows="5" placeholder="Ключевые мысли, кадры, структура"></textarea></label>
+          <label class="content-field content-field-wide"><span>Следующий шаг</span><input id="contentNextActionInput" type="text" maxlength="140" autocomplete="off" placeholder="Одно конкретное действие"></label>
+          <label class="content-field"><span>Дата публикации</span><input id="contentPublishDateInput" type="date"></label>
+          <label class="content-field"><span>Время</span><input id="contentPublishTimeInput" type="time"></label>
+          <div class="content-metric-fields content-field-wide">
+            <label class="content-field"><span>Просмотры</span><input id="contentViewsInput" type="number" min="0" inputmode="numeric"></label>
+            <label class="content-field"><span>Охват</span><input id="contentReachInput" type="number" min="0" inputmode="numeric"></label>
+            <label class="content-field"><span>Лайки</span><input id="contentLikesInput" type="number" min="0" inputmode="numeric"></label>
+            <label class="content-field"><span>Комментарии</span><input id="contentCommentsInput" type="number" min="0" inputmode="numeric"></label>
+            <label class="content-field"><span>Репосты</span><input id="contentSharesInput" type="number" min="0" inputmode="numeric"></label>
+            <label class="content-field"><span>Сохранения</span><input id="contentSavesInput" type="number" min="0" inputmode="numeric"></label>
+            <label class="content-field"><span>Средний досмотр, %</span><input id="contentRetentionInput" type="number" min="0" max="100" inputmode="decimal"></label>
+          </div>
+        </div>
+        <footer class="content-editor-actions">
+          <button class="content-primary-button" id="saveContentItem" type="button">Сохранить</button>
+          <button class="content-danger-button" id="deleteContentItem" type="button" hidden>Удалить ролик</button>
+        </footer>
+      </section>
+    </div>
+
+    <div class="content-editor-modal" id="contentTemplateModal" aria-hidden="true">
+      <button class="content-modal-backdrop" id="contentTemplateBackdrop" type="button" aria-label="Закрыть редактор шаблона"></button>
+      <section class="content-editor-panel content-template-panel" role="dialog" aria-modal="true" aria-labelledby="contentTemplateEditorTitle">
+        <header class="content-editor-header">
+          <div><p class="content-kicker">ШАБЛОН</p><h2 id="contentTemplateEditorTitle">Новый шаблон</h2></div>
+          <button class="content-close-button" id="closeContentTemplate" type="button" aria-label="Закрыть" title="Закрыть">×</button>
+        </header>
+        <div class="content-editor-form">
+          <label class="content-field content-field-wide"><span>Название</span><input id="contentTemplateTitleInput" type="text" maxlength="60" autocomplete="off"></label>
+          <label class="content-field"><span>Формат</span><select id="contentTemplateFormatInput"><option>Reels</option><option>TikTok</option><option>Shorts</option><option>Видео</option><option>Карусель</option><option>Пост</option></select></label>
+          <label class="content-field content-field-wide"><span>Хук-заготовка</span><textarea id="contentTemplateHookInput" rows="2"></textarea></label>
+          <label class="content-field content-field-wide"><span>Структура</span><textarea id="contentTemplateBodyInput" rows="6"></textarea></label>
+        </div>
+        <footer class="content-editor-actions">
+          <button class="content-primary-button" id="saveContentTemplate" type="button">Сохранить шаблон</button>
+          <button class="content-danger-button" id="deleteContentTemplate" type="button" hidden>Удалить шаблон</button>
+        </footer>
+      </section>
+    </div>
+
     <script src="vendor/supabase-2.110.3.js?v=30"></script>
-    <script src="script.js?v=36"></script>
+    <script src="script.js?v=37"></script>
   </body>
 </html>
