@@ -20,10 +20,10 @@
   const monthNames = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
   const calendarMonthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
   const contentStages = [
-    { id: "idea", name: "Идея" },
-    { id: "preparation", name: "Подготовка" },
-    { id: "production", name: "Производство" },
-    { id: "published", name: "Опубликовано" }
+    { id: "idea", name: "Идея", description: "Мысль сохранена" },
+    { id: "preparation", name: "Подготовка", description: "Хук и сценарий" },
+    { id: "production", name: "Производство", description: "Съёмка и монтаж" },
+    { id: "published", name: "Опубликовано", description: "Ролик вышел" }
   ];
 
   const state = loadState();
@@ -197,14 +197,19 @@
   const addContentPillarButton = document.querySelector("#addContentPillar");
   const resetContentSpaceButton = document.querySelector("#resetContentSpace");
   const contentEditorModal = document.querySelector("#contentEditorModal");
+  const contentEditorPanel = contentEditorModal.querySelector(".content-editor-panel");
   const contentEditorBackdrop = document.querySelector("#contentEditorBackdrop");
   const closeContentEditorButton = document.querySelector("#closeContentEditor");
   const contentEditorTitle = document.querySelector("#contentEditorTitle");
   const contentTitleInput = document.querySelector("#contentTitleInput");
   const contentStageInput = document.querySelector("#contentStageInput");
+  const contentStageOptions = document.querySelector("#contentStageOptions");
   const contentPlatformInput = document.querySelector("#contentPlatformInput");
+  const contentPlatformOptions = document.querySelector("#contentPlatformOptions");
   const contentFormatInput = document.querySelector("#contentFormatInput");
+  const contentFormatOptions = document.querySelector("#contentFormatOptions");
   const contentPillarInput = document.querySelector("#contentPillarInput");
+  const contentPillarOptions = document.querySelector("#contentPillarOptions");
   const contentHookInput = document.querySelector("#contentHookInput");
   const contentScriptInput = document.querySelector("#contentScriptInput");
   const contentNextActionInput = document.querySelector("#contentNextActionInput");
@@ -217,6 +222,7 @@
   const contentSharesInput = document.querySelector("#contentSharesInput");
   const contentSavesInput = document.querySelector("#contentSavesInput");
   const contentRetentionInput = document.querySelector("#contentRetentionInput");
+  const contentResultsSection = document.querySelector("#contentResultsSection");
   const saveContentItemButton = document.querySelector("#saveContentItem");
   const deleteContentItemButton = document.querySelector("#deleteContentItem");
   const contentTemplateModal = document.querySelector("#contentTemplateModal");
@@ -267,6 +273,10 @@
   contentAnalyticsPeriod.addEventListener("change", renderContentAnalytics);
   contentEditorBackdrop.addEventListener("click", closeContentEditor);
   closeContentEditorButton.addEventListener("click", closeContentEditor);
+  bindContentChoiceGroup(contentStageOptions, contentStageInput);
+  bindContentChoiceGroup(contentPlatformOptions, contentPlatformInput);
+  bindContentChoiceGroup(contentFormatOptions, contentFormatInput);
+  bindContentChoiceGroup(contentPillarOptions, contentPillarInput);
   saveContentItemButton.addEventListener("click", saveContentItemFromEditor);
   deleteContentItemButton.addEventListener("click", deleteContentItemFromEditor);
   addContentTemplateButton.addEventListener("click", () => openContentTemplateEditor());
@@ -2974,6 +2984,39 @@
     if (["all", ...studio.platforms].includes(platformFilter)) contentPlatformFilter.value = platformFilter;
   }
 
+  function bindContentChoiceGroup(container, select) {
+    container.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-content-choice]");
+      if (!button || !container.contains(button)) return;
+      select.value = button.dataset.contentChoice;
+      if (select === contentStageInput && select.value === "published") contentResultsSection.open = true;
+      renderContentEditorChoices();
+    });
+  }
+
+  function renderContentEditorChoices() {
+    contentStageOptions.innerHTML = contentStages.map((stage, index) => {
+      const selected = stage.id === contentStageInput.value;
+      return `
+        <button class="content-stage-option ${selected ? "is-selected" : ""}" type="button" role="radio" aria-checked="${selected}" data-content-choice="${stage.id}">
+          <span class="content-stage-option-number">${String(index + 1).padStart(2, "0")}</span>
+          <span class="content-stage-option-copy"><strong>${escapeHtml(stage.name)}</strong><small>${escapeHtml(stage.description)}</small></span>
+          <span class="content-choice-check" aria-hidden="true">&#10003;</span>
+        </button>
+      `;
+    }).join("");
+    renderContentChipOptions(contentPlatformOptions, contentPlatformInput);
+    renderContentChipOptions(contentFormatOptions, contentFormatInput);
+    renderContentChipOptions(contentPillarOptions, contentPillarInput);
+  }
+
+  function renderContentChipOptions(container, select) {
+    container.innerHTML = Array.from(select.options).map((option) => {
+      const selected = option.value === select.value;
+      return `<button class="content-choice-chip ${selected ? "is-selected" : ""}" type="button" role="radio" aria-checked="${selected}" data-content-choice="${escapeAttribute(option.value)}">${escapeHtml(option.textContent)}</button>`;
+    }).join("");
+  }
+
   function renderContentWork() {
     const studio = contentStudioState();
     const query = contentWorkSearch.value.trim().toLowerCase();
@@ -3203,6 +3246,7 @@
     contentPlatformInput.value = existing?.platform || studio.platforms[0];
     contentFormatInput.value = existing?.format || template?.format || "Reels";
     contentPillarInput.value = existing?.pillar || studio.pillars[0];
+    renderContentEditorChoices();
     contentHookInput.value = existing?.hook || template?.hook || "";
     contentScriptInput.value = existing?.script || template?.body || "";
     contentNextActionInput.value = existing?.nextAction || "";
@@ -3216,10 +3260,13 @@
     contentSharesInput.value = metrics.shares || "";
     contentSavesInput.value = metrics.saves || "";
     contentRetentionInput.value = metrics.retention || "";
+    contentResultsSection.open = existing?.stage === "published" || Object.values(metrics).some((value) => Number(value) > 0);
+    saveContentItemButton.textContent = existing ? "Сохранить изменения" : "Сохранить идею";
     deleteContentItemButton.hidden = !existing;
     contentEditorModal.classList.add("is-open");
     contentEditorModal.setAttribute("aria-hidden", "false");
     document.body.classList.add("modal-open");
+    contentEditorPanel.scrollTop = 0;
     requestAnimationFrame(() => contentTitleInput.focus());
   }
 
@@ -3550,7 +3597,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=37").then((registration) => registration.update()).catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=38").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();

@@ -21,7 +21,7 @@
     <link rel="icon" href="icon.ico?v=30" sizes="any">
     <link rel="apple-touch-icon" href="apple-touch-icon.png?v=30">
     <link rel="manifest" href="manifest.webmanifest?v=30">
-    <link rel="stylesheet" href="styles.css?v=37">
+    <link rel="stylesheet" href="styles.css?v=38">
   </head>
   <body>
     <div class="auth-screen" id="authScreen" aria-live="polite">
@@ -591,33 +591,91 @@
       <button class="content-modal-backdrop" id="contentEditorBackdrop" type="button" aria-label="Закрыть редактор ролика"></button>
       <section class="content-editor-panel" role="dialog" aria-modal="true" aria-labelledby="contentEditorTitle">
         <header class="content-editor-header">
-          <div><p class="content-kicker">РОЛИК</p><h2 id="contentEditorTitle">Новая идея</h2></div>
+          <div><p class="content-kicker">КОНТЕНТ</p><h2 id="contentEditorTitle">Новая идея</h2></div>
           <button class="content-close-button" id="closeContentEditor" type="button" aria-label="Закрыть" title="Закрыть">×</button>
         </header>
         <div class="content-editor-form">
-          <label class="content-field content-field-wide"><span>Название</span><input id="contentTitleInput" type="text" maxlength="100" autocomplete="off" placeholder="О чём будет ролик"></label>
-          <label class="content-field"><span>Этап</span><select id="contentStageInput"></select></label>
-          <label class="content-field"><span>Платформа</span><select id="contentPlatformInput"></select></label>
-          <label class="content-field"><span>Формат</span><select id="contentFormatInput"><option>Reels</option><option>TikTok</option><option>Shorts</option><option>Видео</option><option>Карусель</option><option>Пост</option></select></label>
-          <label class="content-field"><span>Рубрика</span><select id="contentPillarInput"></select></label>
-          <label class="content-field content-field-wide"><span>Хук</span><textarea id="contentHookInput" rows="2" placeholder="Первая фраза или кадр"></textarea></label>
-          <label class="content-field content-field-wide"><span>Сценарий и заметки</span><textarea id="contentScriptInput" rows="5" placeholder="Ключевые мысли, кадры, структура"></textarea></label>
-          <label class="content-field content-field-wide"><span>Следующий шаг</span><input id="contentNextActionInput" type="text" maxlength="140" autocomplete="off" placeholder="Одно конкретное действие"></label>
-          <label class="content-field"><span>Дата публикации</span><input id="contentPublishDateInput" type="date"></label>
-          <label class="content-field"><span>Время</span><input id="contentPublishTimeInput" type="time"></label>
-          <div class="content-metric-fields content-field-wide">
-            <label class="content-field"><span>Просмотры</span><input id="contentViewsInput" type="number" min="0" inputmode="numeric"></label>
-            <label class="content-field"><span>Охват</span><input id="contentReachInput" type="number" min="0" inputmode="numeric"></label>
-            <label class="content-field"><span>Лайки</span><input id="contentLikesInput" type="number" min="0" inputmode="numeric"></label>
-            <label class="content-field"><span>Комментарии</span><input id="contentCommentsInput" type="number" min="0" inputmode="numeric"></label>
-            <label class="content-field"><span>Репосты</span><input id="contentSharesInput" type="number" min="0" inputmode="numeric"></label>
-            <label class="content-field"><span>Сохранения</span><input id="contentSavesInput" type="number" min="0" inputmode="numeric"></label>
-            <label class="content-field"><span>Средний досмотр, %</span><input id="contentRetentionInput" type="number" min="0" max="100" inputmode="decimal"></label>
-          </div>
+          <section class="content-editor-section content-editor-section-primary">
+            <header class="content-editor-section-header">
+              <span class="content-section-number">01</span>
+              <h3>Основа идеи</h3>
+              <span class="content-section-note">Обязательно</span>
+            </header>
+            <label class="content-field"><span>Название ролика</span><input id="contentTitleInput" type="text" maxlength="100" autocomplete="off" placeholder="О чём будет ролик"></label>
+          </section>
+
+          <section class="content-editor-section">
+            <header class="content-editor-section-header">
+              <span class="content-section-number">02</span>
+              <h3>Параметры</h3>
+            </header>
+            <div class="content-choice-field content-choice-field-wide">
+              <span class="content-choice-label">Этап работы</span>
+              <select class="content-choice-source" id="contentStageInput" aria-label="Этап работы" aria-hidden="true" tabindex="-1"></select>
+              <div class="content-stage-options" id="contentStageOptions" role="radiogroup" aria-label="Этап работы"></div>
+            </div>
+            <div class="content-choice-grid">
+              <div class="content-choice-field">
+                <span class="content-choice-label">Платформа</span>
+                <select class="content-choice-source" id="contentPlatformInput" aria-label="Платформа" aria-hidden="true" tabindex="-1"></select>
+                <div class="content-chip-options" id="contentPlatformOptions" role="radiogroup" aria-label="Платформа"></div>
+              </div>
+              <div class="content-choice-field">
+                <span class="content-choice-label">Формат</span>
+                <select class="content-choice-source" id="contentFormatInput" aria-label="Формат" aria-hidden="true" tabindex="-1"><option>Reels</option><option>TikTok</option><option>Shorts</option><option>Видео</option><option>Карусель</option><option>Пост</option></select>
+                <div class="content-chip-options" id="contentFormatOptions" role="radiogroup" aria-label="Формат"></div>
+              </div>
+            </div>
+            <div class="content-choice-field content-choice-field-wide">
+              <span class="content-choice-label">Рубрика</span>
+              <select class="content-choice-source" id="contentPillarInput" aria-label="Рубрика" aria-hidden="true" tabindex="-1"></select>
+              <div class="content-chip-options" id="contentPillarOptions" role="radiogroup" aria-label="Рубрика"></div>
+            </div>
+          </section>
+
+          <section class="content-editor-section">
+            <header class="content-editor-section-header">
+              <span class="content-section-number">03</span>
+              <h3>Содержание</h3>
+            </header>
+            <div class="content-editor-section-grid">
+              <label class="content-field content-field-wide"><span>Хук</span><textarea id="contentHookInput" rows="2" placeholder="Первая фраза или кадр"></textarea></label>
+              <label class="content-field content-field-wide"><span>Сценарий и заметки</span><textarea id="contentScriptInput" rows="5" placeholder="Ключевые мысли, кадры, структура"></textarea></label>
+              <label class="content-field content-field-wide"><span>Следующий шаг</span><input id="contentNextActionInput" type="text" maxlength="140" autocomplete="off" placeholder="Одно конкретное действие"></label>
+            </div>
+          </section>
+
+          <section class="content-editor-section">
+            <header class="content-editor-section-header">
+              <span class="content-section-number">04</span>
+              <h3>Публикация</h3>
+            </header>
+            <div class="content-editor-section-grid content-publish-fields">
+              <label class="content-field"><span>Дата</span><input id="contentPublishDateInput" type="date"></label>
+              <label class="content-field"><span>Время</span><input id="contentPublishTimeInput" type="time"></label>
+            </div>
+          </section>
+
+          <details class="content-editor-results" id="contentResultsSection">
+            <summary>
+              <span class="content-section-number">05</span>
+              <span><strong>Результаты ролика</strong><small>После публикации</small></span>
+              <span class="content-results-chevron" aria-hidden="true">⌄</span>
+            </summary>
+            <div class="content-metric-fields">
+              <label class="content-field"><span>Просмотры</span><input id="contentViewsInput" type="number" min="0" inputmode="numeric"></label>
+              <label class="content-field"><span>Охват</span><input id="contentReachInput" type="number" min="0" inputmode="numeric"></label>
+              <label class="content-field"><span>Лайки</span><input id="contentLikesInput" type="number" min="0" inputmode="numeric"></label>
+              <label class="content-field"><span>Комментарии</span><input id="contentCommentsInput" type="number" min="0" inputmode="numeric"></label>
+              <label class="content-field"><span>Репосты</span><input id="contentSharesInput" type="number" min="0" inputmode="numeric"></label>
+              <label class="content-field"><span>Сохранения</span><input id="contentSavesInput" type="number" min="0" inputmode="numeric"></label>
+              <label class="content-field"><span>Средний досмотр, %</span><input id="contentRetentionInput" type="number" min="0" max="100" inputmode="decimal"></label>
+            </div>
+          </details>
         </div>
         <footer class="content-editor-actions">
-          <button class="content-primary-button" id="saveContentItem" type="button">Сохранить</button>
           <button class="content-danger-button" id="deleteContentItem" type="button" hidden>Удалить ролик</button>
+          <button class="content-primary-button" id="saveContentItem" type="button">Сохранить идею</button>
         </footer>
       </section>
     </div>
@@ -643,6 +701,6 @@
     </div>
 
     <script src="vendor/supabase-2.110.3.js?v=30"></script>
-    <script src="script.js?v=37"></script>
+    <script src="script.js?v=38"></script>
   </body>
 </html>
