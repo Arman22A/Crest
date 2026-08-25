@@ -5029,10 +5029,7 @@ html[data-theme="knight"] .task-type-badge {
   }
 }
 
-/* Calendar completion states v39 */
-.day-check {
-  display: none;
-}
+/* Calendar completion states v40 */
 
 html:not([data-theme="knight"]) .day-number {
   position: relative;
@@ -5067,37 +5064,11 @@ html:not([data-theme="knight"]) .day-cell.is-today.is-done .day-number {
   background: #2f865d;
 }
 
-html:not([data-theme="knight"]) .day-cell.is-done .day-check {
-  position: absolute;
-  right: -5px;
-  bottom: -4px;
-  width: 17px;
-  height: 17px;
-  border: 1px solid rgba(47, 134, 93, 0.28);
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: #2f865d;
-  background: #ffffff;
-  box-shadow: 0 2px 5px rgba(36, 48, 70, 0.18);
-  font-size: 0.66rem;
-  font-weight: 900;
-  line-height: 1;
-}
-
 @media (max-width: 560px) {
   html:not([data-theme="knight"]) .day-number {
     width: 34px;
     height: 34px;
     font-size: 0.88rem;
-  }
-
-  html:not([data-theme="knight"]) .day-cell.is-done .day-check {
-    right: -4px;
-    bottom: -3px;
-    width: 15px;
-    height: 15px;
-    font-size: 0.58rem;
   }
 }
 
