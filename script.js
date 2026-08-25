@@ -10,6 +10,7 @@
   const cloudFunctionUrl = "https://bclhwefsswxtqtwzppik.supabase.co/functions/v1/crest-api";
   const cloudPublishableKey = "sb_publishable_CDziEC3GM9o0di7zIqw9vw_PgeCT9oJ";
   const vapidPublicKey = "BA1j44cNJV6QoirknYZOiFPQaLiygwxyVmRbaFCcIm3V5lFmTeM-S1SgctoZXNNR5makhB7ip44OcXjDXNMeRQc";
+  const calendarBlue = "#286fb4";
   const localPreview = ["localhost", "127.0.0.1"].includes(window.location.hostname)
     && new URLSearchParams(window.location.search).has("preview");
   const authClient = window.supabase.createClient(supabaseUrl, cloudPublishableKey, {
@@ -48,7 +49,6 @@
   let activeProfilePage = "overview";
   let editingCalendarId = null;
   let selectedCalendarIcon = "calendar";
-  let selectedCalendarColor = "#286fb4";
   let activeContentView = "work";
   let activeMobileContentStage = null;
   let editingContentId = null;
@@ -155,7 +155,6 @@
   const calendarEditorTitle = document.querySelector("#calendarEditorTitle");
   const calendarNameInput = document.querySelector("#calendarNameInput");
   const calendarIconOptions = document.querySelector("#calendarIconOptions");
-  const calendarColorOptions = document.querySelector("#calendarColorOptions");
   const saveCalendarButton = document.querySelector("#saveCalendarButton");
   const deleteCalendarButton = document.querySelector("#deleteCalendarButton");
   const planningSpace = document.querySelector("#planningSpace");
@@ -337,7 +336,6 @@
   saveCalendarButton.addEventListener("click", saveCalendarFromEditor);
   deleteCalendarButton.addEventListener("click", deleteCalendarFromEditor);
   calendarIconOptions.addEventListener("click", handleCalendarIconChoice);
-  calendarColorOptions.addEventListener("click", handleCalendarColorChoice);
   profileTabs.forEach((button) => {
     button.addEventListener("click", () => showProfilePage(button.dataset.profileTab));
   });
@@ -805,7 +803,7 @@
         id: "tasks",
         name: "Дела",
         icon: "list",
-        color: "#286fb4",
+        color: calendarBlue,
         description: "Задачи и проекты",
         system: true
       },
@@ -813,7 +811,7 @@
         id: "habits",
         name: "Привычки",
         icon: "repeat",
-        color: "#2f7d5a",
+        color: calendarBlue,
         description: "Полезные привычки",
         system: true
       },
@@ -821,7 +819,7 @@
         id: "sport",
         name: "Спорт",
         icon: "sport",
-        color: "#b76032",
+        color: calendarBlue,
         description: "Тренировки и форма",
         system: true
       }
@@ -1095,7 +1093,7 @@
     state.dayPlans = state.dayPlans && typeof state.dayPlans === "object" ? state.dayPlans : {};
     restoreLegacyLockedDays();
     migrateLegacyCalendarData(fallbackUpdatedAt);
-    state.schemaVersion = 33;
+    state.schemaVersion = 34;
     state.calendars = normalizeCalendars(state.calendars);
     state.activeCalendarId = calendarById(state.activeCalendarId || "tasks").id;
     state.taskTypes = normalizeTaskTypes(state.taskTypes);
@@ -1210,7 +1208,7 @@
         id: String(calendar.id || `calendar-${Date.now()}-${Math.random().toString(16).slice(2)}`),
         name: String(calendar.name || "Календарь").trim().slice(0, 24) || "Календарь",
         icon: calendarIconNames().includes(calendar.icon) ? calendar.icon : "calendar",
-        color: validCalendarColor(calendar.color) ? calendar.color : "#286fb4",
+        color: calendarBlue,
         description: String(calendar.description || "Личный календарь").trim().slice(0, 48),
         system: Boolean(calendar.system)
       }))
@@ -1498,7 +1496,6 @@
     const calendar = calendarId ? calendarById(calendarId) : null;
     editingCalendarId = calendar ? calendar.id : null;
     selectedCalendarIcon = calendar?.icon || "calendar";
-    selectedCalendarColor = calendar?.color || "#286fb4";
     calendarEditorTitle.textContent = calendar ? "Настроить календарь" : "Новый календарь";
     calendarNameInput.value = calendar?.name || "";
     saveCalendarButton.textContent = calendar ? "Сохранить" : "Создать календарь";
@@ -1506,9 +1503,6 @@
     calendarIconOptions.querySelectorAll("[data-calendar-icon]").forEach((button) => {
       button.innerHTML = calendarIconSvg(button.dataset.calendarIcon);
       button.classList.toggle("is-selected", button.dataset.calendarIcon === selectedCalendarIcon);
-    });
-    calendarColorOptions.querySelectorAll("[data-calendar-color]").forEach((button) => {
-      button.classList.toggle("is-selected", button.dataset.calendarColor === selectedCalendarColor);
     });
     calendarEditorModal.classList.add("is-open");
     calendarEditorModal.setAttribute("aria-hidden", "false");
@@ -1534,15 +1528,6 @@
     });
   }
 
-  function handleCalendarColorChoice(event) {
-    const button = event.target.closest("[data-calendar-color]");
-    if (!button) return;
-    selectedCalendarColor = button.dataset.calendarColor;
-    calendarColorOptions.querySelectorAll("[data-calendar-color]").forEach((item) => {
-      item.classList.toggle("is-selected", item === button);
-    });
-  }
-
   function saveCalendarFromEditor() {
     const name = calendarNameInput.value.trim().slice(0, 24);
     if (!name) {
@@ -1555,7 +1540,7 @@
       if (!calendar) return;
       calendar.name = name;
       calendar.icon = selectedCalendarIcon;
-      calendar.color = selectedCalendarColor;
+      calendar.color = calendarBlue;
       calendar.description = calendar.system ? calendar.description : "Личный календарь";
     } else {
       const id = `calendar-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -1563,7 +1548,7 @@
         id,
         name,
         icon: selectedCalendarIcon,
-        color: selectedCalendarColor,
+        color: calendarBlue,
         description: "Личный календарь",
         system: false
       });
@@ -1615,13 +1600,14 @@
       const entry = readEntry(day.key);
       const button = document.createElement("button");
       const visibleDay = effectiveDay(day);
-      const status = dayStatus(visibleDay, entry);
+      const status = calendarDayStatus(visibleDay, entry);
       button.type = "button";
       button.className = `day-cell is-${status.kind} ${day.key === formatKey(today) ? "is-today" : ""}`;
       button.setAttribute("aria-label", `${formatDate(day.date)}, ${weekdayNames[day.date.getDay()]}, ${status.label}`);
       button.innerHTML = `
         <span class="day-number">
           <span>${day.date.getDate()}</span>
+          <span class="day-check" aria-hidden="true">✓</span>
         </span>
       `;
       button.addEventListener("click", () => openDay(day.key));
@@ -2906,6 +2892,14 @@
     return { kind: "not-started", label: "Не начато" };
   }
 
+  function calendarDayStatus(day, entry) {
+    const done = day.tasks.filter((task) => entry.tasks[task.id]).length;
+    const complete = day.tasks.length > 0 && done === day.tasks.length;
+    return complete
+      ? { kind: "done", label: "Все выполнено" }
+      : { kind: "pending", label: "Не выполнено" };
+  }
+
   function initializeContentStudio() {
     renderContentFilters();
     activeContentView = "work";
@@ -3597,7 +3591,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=38").then((registration) => registration.update()).catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=39").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();
