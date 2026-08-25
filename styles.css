@@ -4663,15 +4663,13 @@ html[data-theme="knight"] * {
   margin-bottom: 8px;
 }
 
-.calendar-icon-options,
-.calendar-color-options {
+.calendar-icon-options {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 7px;
 }
 
-.calendar-icon-options button,
-.calendar-color-options button {
+.calendar-icon-options button {
   min-width: 0;
   aspect-ratio: 1;
   border: 1px solid var(--line);
@@ -4686,19 +4684,6 @@ html[data-theme="knight"] * {
   border-color: var(--calendar-accent);
   color: var(--calendar-accent);
   background: color-mix(in srgb, var(--calendar-accent) 8%, var(--panel));
-}
-
-.calendar-color-options button::before {
-  content: "";
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--swatch);
-}
-
-.calendar-color-options button.is-selected {
-  border-color: var(--swatch);
-  box-shadow: inset 0 0 0 2px var(--panel), inset 0 0 0 4px var(--swatch);
 }
 
 html[data-theme="knight"] .calendar-rail,
@@ -4724,7 +4709,6 @@ html[data-theme="knight"] .calendar-tab.is-active::before {
 html[data-theme="knight"] .profile-tabs,
 html[data-theme="knight"] .profile-calendar-row,
 html[data-theme="knight"] .calendar-icon-options button,
-html[data-theme="knight"] .calendar-color-options button,
 html[data-theme="knight"] .calendar-editor-form input {
   background: rgba(6, 14, 21, 0.78);
 }
@@ -5035,14 +5019,85 @@ html[data-theme="knight"] .task-type-badge {
     width: 100%;
   }
 
-  .calendar-icon-options,
-  .calendar-color-options {
+  .calendar-icon-options {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .task-editor-actions,
   .new-task-type {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Calendar completion states v39 */
+.day-check {
+  display: none;
+}
+
+html:not([data-theme="knight"]) .day-number {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #d9dee7;
+  color: #253047;
+  background: #ffffff;
+  box-shadow: 0 2px 7px rgba(36, 48, 70, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
+html:not([data-theme="knight"]) .day-cell.is-today .day-number {
+  color: #253047;
+  border-color: #ffffff;
+  outline: 2px solid var(--calendar-accent);
+  outline-offset: 3px;
+  background: #ffffff;
+  box-shadow: 0 0 0 5px rgba(40, 111, 180, 0.09), 0 0 16px rgba(40, 111, 180, 0.24);
+}
+
+html:not([data-theme="knight"]) .day-cell.is-done .day-number {
+  border-color: #2f865d;
+  color: #ffffff;
+  background: #2f865d;
+  box-shadow: 0 3px 9px rgba(47, 134, 93, 0.22);
+}
+
+html:not([data-theme="knight"]) .day-cell.is-today.is-done .day-number {
+  border-color: #2f865d;
+  color: #ffffff;
+  outline-color: var(--calendar-accent);
+  background: #2f865d;
+}
+
+html:not([data-theme="knight"]) .day-cell.is-done .day-check {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  width: 17px;
+  height: 17px;
+  border: 1px solid rgba(47, 134, 93, 0.28);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #2f865d;
+  background: #ffffff;
+  box-shadow: 0 2px 5px rgba(36, 48, 70, 0.18);
+  font-size: 0.66rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+@media (max-width: 560px) {
+  html:not([data-theme="knight"]) .day-number {
+    width: 34px;
+    height: 34px;
+    font-size: 0.88rem;
+  }
+
+  html:not([data-theme="knight"]) .day-cell.is-done .day-check {
+    right: -4px;
+    bottom: -3px;
+    width: 15px;
+    height: 15px;
+    font-size: 0.58rem;
   }
 }
 
