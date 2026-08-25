@@ -1,11 +1,11 @@
-const cacheName = "crest-v40";
+const cacheName = "crest-v41";
 const vapidPublicKey = "BA1j44cNJV6QoirknYZOiFPQaLiygwxyVmRbaFCcIm3V5lFmTeM-S1SgctoZXNNR5makhB7ip44OcXjDXNMeRQc";
 const assets = [
   "./",
   "./index.html",
-  "./styles.css?v=40",
+  "./styles.css?v=41",
   "./vendor/supabase-2.110.3.js?v=30",
-  "./script.js?v=40",
+  "./script.js?v=41",
   "./manifest.webmanifest?v=30",
   "./icon.ico?v=30",
   "./icon-192.png",
