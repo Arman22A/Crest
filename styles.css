@@ -4203,6 +4203,51 @@ html[data-theme="knight"] * {
   text-overflow: ellipsis;
 }
 
+.calendar-tab .calendar-tab-streak {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: auto;
+  min-width: 25px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 2px 4px 2px 2px;
+  overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+  border-radius: 999px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 91%, transparent);
+  box-shadow: 0 1px 4px rgba(32, 33, 36, 0.08);
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.calendar-tab .calendar-tab-streak .calendar-streak-flame {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  fill: none;
+  stroke: none;
+  filter: none;
+}
+
+.calendar-tab .calendar-tab-streak strong {
+  min-width: 7px;
+  color: inherit;
+  font-size: inherit;
+  line-height: 1;
+  text-align: center;
+}
+
+.calendar-tab .calendar-tab-streak .streak-level-3,
+.calendar-tab .calendar-tab-streak .streak-level-4 {
+  filter: drop-shadow(0 0 3px rgba(26, 115, 232, 0.28));
+}
+
 .calendar-tab:hover {
   color: var(--ink);
   background: var(--panel-soft);
@@ -4787,7 +4832,7 @@ html[data-theme="knight"] .task-type-badge {
     align-content: center;
     gap: 7px;
     border-color: var(--line);
-    padding: 8px 11px;
+    padding: 8px 34px 8px 11px;
     background: var(--panel);
   }
 
@@ -4804,6 +4849,14 @@ html[data-theme="knight"] .task-type-badge {
   .calendar-tab span {
     font-size: 0.78rem;
     text-align: left;
+  }
+
+  .calendar-tab .calendar-tab-streak {
+    top: 50%;
+    right: 7px;
+    transform: translateY(-50%);
+    font-size: 0.65rem;
+    text-align: center;
   }
 
   .calendar-add-button {
@@ -5029,7 +5082,7 @@ html[data-theme="knight"] .task-type-badge {
   }
 }
 
-/* Calendar completion states v40 */
+/* Calendar completion states v41 */
 
 html:not([data-theme="knight"]) .day-number {
   position: relative;
