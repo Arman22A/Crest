@@ -2302,10 +2302,14 @@
     for (let date = new Date(today); date >= rangeStart; date.setDate(date.getDate() - 1)) {
       const day = dayForDate(new Date(date), calendarId);
       const visibleDay = effectiveDayForCalendar(day, calendarId);
-      if (!visibleDay.tasks.length) continue;
+      const isToday = day.date.getTime() === today.getTime();
+      if (!visibleDay.tasks.length) {
+        if (isToday) continue;
+        break;
+      }
       const entry = readEntryForCalendar(day.key, calendarId);
       const complete = visibleDay.tasks.every((task) => entry.tasks[task.id]);
-      if (day.date.getTime() === today.getTime() && !complete) continue;
+      if (isToday && !complete) continue;
       if (!complete) break;
       currentStreak += 1;
     }
@@ -3629,7 +3633,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=41").then((registration) => registration.update()).catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=42").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();
