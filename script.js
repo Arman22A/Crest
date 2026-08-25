@@ -1372,6 +1372,15 @@
     return `<svg aria-hidden="true" viewBox="0 0 24 24">${paths[name] || paths.calendar}</svg>`;
   }
 
+  function streakFlameSvg(streak) {
+    return `
+      <svg class="calendar-streak-flame ${streakLevelClass(streak)}" aria-hidden="true" viewBox="0 0 24 24">
+        <path class="flame-outer" d="M12.1 22c-4.1 0-7.1-2.8-7.1-6.8 0-2.8 1.5-5 3.7-7.3.5 1.7 1.5 2.6 2.5 3.2-.3-3.3 1.1-6.2 4.2-9.1.5 3.4 2 5.1 3.1 6.5 1 1.3 1.8 2.5 1.8 4.8 0 5.1-3.7 8.7-8.2 8.7Z"></path>
+        <path class="flame-inner" d="M12.2 19c-1.8 0-3.1-1.2-3.1-3 0-1.3.7-2.3 1.7-3.4.3.9.8 1.5 1.5 1.9-.1-1.7.6-3.2 2.1-4.7.3 1.8 1.1 2.7 1.6 3.5.5.7.8 1.3.8 2.4 0 2-1.8 3.3-4.6 3.3Z"></path>
+      </svg>
+    `;
+  }
+
   function renderCalendarNavigation() {
     const current = activeCalendar();
     calendarTabs.innerHTML = "";
@@ -1381,9 +1390,18 @@
       button.type = "button";
       button.className = `calendar-tab ${active ? "is-active" : ""}`;
       button.style.setProperty("--calendar-color", calendar.color);
+      button.dataset.calendarId = calendar.id;
       button.setAttribute("aria-pressed", String(active));
       button.setAttribute("aria-label", `Открыть календарь ${calendar.name}`);
-      button.innerHTML = `${calendarIconSvg(calendar.icon)}<span>${escapeHtml(calendar.name)}</span>`;
+      const streak = calculateCalendarStreak(calendar.id);
+      button.innerHTML = `
+        ${calendarIconSvg(calendar.icon)}
+        <span class="calendar-tab-name">${escapeHtml(calendar.name)}</span>
+        <span class="calendar-tab-streak" aria-label="Серия: ${streak} ${dayWord(streak)}">
+          ${streakFlameSvg(streak)}
+          <strong>${streak}</strong>
+        </span>
+      `;
       button.addEventListener("click", () => switchCalendar(calendar.id));
       calendarTabs.appendChild(button);
     });
@@ -2238,7 +2256,6 @@
     let workTotal = 0;
     let sportDone = 0;
     let sportTotal = 0;
-    let currentStreak = 0;
 
     calendars().forEach((calendar) => {
       trackedDays(calendar.id).forEach((day) => {
@@ -2260,18 +2277,7 @@
       });
     });
 
-    trackedDays("habits").forEach((day) => {
-      if (day.date > today) return;
-      const visibleDay = effectiveDayForCalendar(day, "habits");
-      const entry = readEntryForCalendar(day.key, "habits");
-      const required = visibleDay.tasks.filter((task) => task.type === "habit");
-      const requiredDone = required.length > 0 && required.every((task) => entry.tasks[task.id]);
-      if (day.date < today) {
-        currentStreak = requiredDone ? currentStreak + 1 : 0;
-      } else if (requiredDone) {
-        currentStreak += 1;
-      }
-    });
+    const currentStreak = calculateCalendarStreak(activeCalendar().id);
 
     habitScore.textContent = `${percent(habitDone, habitTotal)}%`;
     workScore.textContent = `${percent(workDone, workTotal)}%`;
@@ -2280,7 +2286,40 @@
     streakScore.textContent = streakText;
     topStreakScore.textContent = streakText;
     streakFlame.className.baseVal = `flame-icon ${streakLevelClass(currentStreak)}`;
+    updateCalendarStreakBadges();
     renderProfileCalendarSummary();
+  }
+
+  function calculateCalendarStreak(calendarId) {
+    let currentStreak = 0;
+    const store = calendarStore(calendarId);
+    const savedKeys = [...Object.keys(store.dayPlans), ...Object.keys(store.entries)].filter(isDateKey);
+    const earliestSavedDate = savedKeys.length
+      ? dayForKey(savedKeys.sort()[0], calendarId).date
+      : planStartDate;
+    const rangeStart = new Date(Math.min(planStartDate.getTime(), earliestSavedDate.getTime()));
+
+    for (let date = new Date(today); date >= rangeStart; date.setDate(date.getDate() - 1)) {
+      const day = dayForDate(new Date(date), calendarId);
+      const visibleDay = effectiveDayForCalendar(day, calendarId);
+      if (!visibleDay.tasks.length) continue;
+      const entry = readEntryForCalendar(day.key, calendarId);
+      const complete = visibleDay.tasks.every((task) => entry.tasks[task.id]);
+      if (day.date.getTime() === today.getTime() && !complete) continue;
+      if (!complete) break;
+      currentStreak += 1;
+    }
+    return currentStreak;
+  }
+
+  function updateCalendarStreakBadges() {
+    calendarTabs.querySelectorAll(".calendar-tab[data-calendar-id]").forEach((button) => {
+      const streak = calculateCalendarStreak(button.dataset.calendarId);
+      const badge = button.querySelector(".calendar-tab-streak");
+      if (!badge) return;
+      badge.setAttribute("aria-label", `Серия: ${streak} ${dayWord(streak)}`);
+      badge.innerHTML = `${streakFlameSvg(streak)}<strong>${streak}</strong>`;
+    });
   }
 
   function trackedDays(calendarId = activeCalendar().id) {
@@ -3590,7 +3629,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=40").then((registration) => registration.update()).catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=41").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();
