@@ -5082,7 +5082,7 @@ html[data-theme="knight"] .task-type-badge {
   }
 }
 
-/* Calendar completion states v41 */
+/* Calendar completion states v42 */
 
 html:not([data-theme="knight"]) .day-number {
   position: relative;
