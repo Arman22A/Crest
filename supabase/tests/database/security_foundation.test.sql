@@ -3,9 +3,9 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(21);
 
-insert into auth.users (id, email) values
-  ('11111111-1111-4111-8111-111111111111', 'owner@crest.test'),
-  ('22222222-2222-4222-8222-222222222222', 'other@crest.test');
+insert into auth.users (id, email, email_confirmed_at) values
+  ('11111111-1111-4111-8111-111111111111', 'owner@crest.test', now()),
+  ('22222222-2222-4222-8222-222222222222', 'other@crest.test', now());
 
 insert into private.crest_app_owners (user_id)
 values ('11111111-1111-4111-8111-111111111111');
@@ -91,11 +91,10 @@ select throws_ok(
   null,
   'authenticated callers cannot bypass fixed limits through the private helper'
 );
-select throws_ok(
-  $$select private.is_crest_owner()$$,
-  '42501',
-  null,
-  'authenticated callers cannot invoke the private allowlist helper directly'
+select is(
+  private.is_crest_owner(),
+  true,
+  'the allowlist helper recognizes only the confirmed active owner'
 );
 
 set local request.jwt.claim.sub = '22222222-2222-4222-8222-222222222222';

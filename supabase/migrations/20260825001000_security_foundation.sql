@@ -2,6 +2,7 @@
 
 create schema if not exists private;
 revoke all on schema private from public, anon, authenticated;
+grant usage on schema private to authenticated;
 alter default privileges in schema private revoke execute on functions from public, anon, authenticated;
 
 create table if not exists private.crest_app_owners (
@@ -53,15 +54,19 @@ stable
 security definer
 set search_path = ''
 as $function$
-  select (select auth.uid()) is not null
-     and exists (
-       select 1
-         from private.crest_app_owners
-        where user_id = (select auth.uid())
-     );
+  select exists (
+    select 1
+      from private.crest_app_owners as owner
+      join auth.users as auth_user on auth_user.id = owner.user_id
+     where owner.user_id = (select auth.uid())
+       and auth_user.email_confirmed_at is not null
+       and auth_user.deleted_at is null
+       and (auth_user.banned_until is null or auth_user.banned_until <= now())
+  );
 $function$;
 
 revoke all on function private.is_crest_owner() from public, anon, authenticated, service_role;
+grant execute on function private.is_crest_owner() to authenticated;
 
 alter table public.progress_sync
   drop constraint if exists progress_sync_payload_object_check,
