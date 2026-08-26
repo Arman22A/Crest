@@ -21,7 +21,7 @@
     <link rel="icon" href="icon.ico?v=30" sizes="any">
     <link rel="apple-touch-icon" href="apple-touch-icon.png?v=30">
     <link rel="manifest" href="manifest.webmanifest?v=30">
-    <link rel="stylesheet" href="styles.css?v=42">
+    <link rel="stylesheet" href="styles.css?v=43">
   </head>
   <body>
     <div class="auth-screen" id="authScreen" aria-live="polite">
@@ -75,6 +75,7 @@
       </section>
     </div>
 
+    <div class="app-root" id="appRoot" aria-hidden="true" inert>
     <main class="app-shell">
       <header class="topbar">
         <div class="brand-copy">
@@ -383,6 +384,13 @@
                 <span>Часовой пояс</span>
                 <strong id="reminderTimezone">Europe/Moscow</strong>
               </div>
+              <label class="reminder-privacy" for="notificationPrivacyInput">
+                <span>Текст на экране блокировки</span>
+                <select id="notificationPrivacyInput">
+                  <option value="neutral">Без названий задач</option>
+                  <option value="detailed">Показывать названия</option>
+                </select>
+              </label>
               <div class="reminder-actions">
                 <button class="secondary-button" id="refreshTimezoneButton" type="button">По времени устройства</button>
                 <button class="secondary-button" id="testNotificationButton" type="button">Проверить уведомление</button>
@@ -460,6 +468,7 @@
                 <button class="primary-button" id="saveProfileName" type="button">Сохранить имя</button>
                 <button class="secondary-button" id="syncNowButton" type="button">Синхронизировать</button>
                 <button class="text-button logout-button" id="logoutButton" type="button">Выйти</button>
+                <button class="text-button logout-button delete-device-data-button" id="deleteDeviceDataButton" type="button">Выйти и удалить данные с этого устройства</button>
               </div>
               <p class="sync-status" id="syncStatus">Проверяем подключение к аккаунту...</p>
             </section>
@@ -689,7 +698,9 @@
       </section>
     </div>
 
+    </div>
+
     <script src="vendor/supabase-2.110.3.js?v=30"></script>
-    <script src="script.js?v=42"></script>
+    <script src="script.js?v=43"></script>
   </body>
 </html>

@@ -1,0 +1,13 @@
+project_id = "crest"
+
+# The legacy mixed function remains configured only for rollback during migration.
+[functions.crest-api]
+verify_jwt = false
+
+# User traffic must pass the platform JWT check and @supabase/server user mode.
+[functions.crest-user-api]
+verify_jwt = true
+
+# Cron has no user JWT. Its handler accepts only the dedicated scheduler secret.
+[functions.crest-cron-dispatch]
+verify_jwt = false

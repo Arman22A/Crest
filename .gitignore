@@ -1,0 +1,33 @@
+# Local Supabase runtime and generated files
+.supabase/
+supabase/.branches/
+supabase/.temp/
+
+# Environment and secret files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Private exports and device data
+backups/
+private-backups/
+exports/
+*.local.json
+
+# Local tooling
+node_modules/
+coverage/
+playwright-report/
+test-results/
+*.log
+.DS_Store
+Thumbs.db
+
+# Local screenshots are not application assets
+*-test.png
+*-final.png
+*-mobile-v*.png
+*-desktop-v*.png

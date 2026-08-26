@@ -1,11 +1,11 @@
-const cacheName = "crest-v42";
+const cacheName = "crest-v43";
 const vapidPublicKey = "BA1j44cNJV6QoirknYZOiFPQaLiygwxyVmRbaFCcIm3V5lFmTeM-S1SgctoZXNNR5makhB7ip44OcXjDXNMeRQc";
 const assets = [
   "./",
   "./index.html",
-  "./styles.css?v=42",
+  "./styles.css?v=43",
   "./vendor/supabase-2.110.3.js?v=30",
-  "./script.js?v=42",
+  "./script.js?v=43",
   "./manifest.webmanifest?v=30",
   "./icon.ico?v=30",
   "./icon-192.png",
@@ -82,12 +82,18 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 self.addEventListener("pushsubscriptionchange", (event) => {
-  event.waitUntil(
-    self.registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-    })
-  );
+  event.waitUntil((async () => {
+    try {
+      await self.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+      });
+    } catch {
+      // The authenticated page retries when it next becomes visible.
+    }
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    windows.forEach((client) => client.postMessage({ type: "CREST_PUSH_SUBSCRIPTION_CHANGED" }));
+  })());
 });
 
 function urlBase64ToUint8Array(value) {

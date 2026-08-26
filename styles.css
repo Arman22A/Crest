@@ -1510,6 +1510,11 @@ body {
   display: none;
 }
 
+body:not(.is-authenticated) .app-root {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .auth-card {
   width: min(430px, 100%);
   border: 1px solid var(--line);
@@ -2492,6 +2497,29 @@ h2 {
   overflow-wrap: anywhere;
   text-align: right;
   font-size: 0.82rem;
+}
+
+.reminder-privacy {
+  display: grid;
+  gap: 6px;
+  max-width: 370px;
+}
+
+.reminder-privacy > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.reminder-privacy select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 34px 8px 10px;
+  color: var(--ink);
+  background: var(--panel);
+  font: inherit;
 }
 
 .reminder-actions {
@@ -4554,6 +4582,13 @@ html[data-theme="knight"] * {
   align-self: center;
   margin: 0 2px;
   color: var(--coral);
+}
+
+.delete-device-data-button {
+  flex-basis: 100%;
+  justify-self: start;
+  width: fit-content;
+  font-size: 0.78rem;
 }
 
 .selected-day-date {

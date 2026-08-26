@@ -7,7 +7,10 @@
   const bootstrapUserId = localStorage.getItem(activeUserStorageKey);
   const storageKey = bootstrapUserId ? `crest-user-${bootstrapUserId}` : legacyStorageKey;
   const supabaseUrl = "https://bclhwefsswxtqtwzppik.supabase.co";
-  const cloudFunctionUrl = "https://bclhwefsswxtqtwzppik.supabase.co/functions/v1/crest-api";
+  const secureCloudRollout = false;
+  const legacyCloudFunctionUrl = "https://bclhwefsswxtqtwzppik.supabase.co/functions/v1/crest-api";
+  const secureCloudFunctionUrl = "https://bclhwefsswxtqtwzppik.supabase.co/functions/v1/crest-user-api";
+  const cloudFunctionUrl = secureCloudRollout ? secureCloudFunctionUrl : legacyCloudFunctionUrl;
   const cloudPublishableKey = "sb_publishable_CDziEC3GM9o0di7zIqw9vw_PgeCT9oJ";
   const vapidPublicKey = "BA1j44cNJV6QoirknYZOiFPQaLiygwxyVmRbaFCcIm3V5lFmTeM-S1SgctoZXNNR5makhB7ip44OcXjDXNMeRQc";
   const calendarBlue = "#286fb4";
@@ -126,6 +129,7 @@
   const saveProfileNameButton = document.querySelector("#saveProfileName");
   const syncNowButton = document.querySelector("#syncNowButton");
   const logoutButton = document.querySelector("#logoutButton");
+  const deleteDeviceDataButton = document.querySelector("#deleteDeviceDataButton");
   const accountEmail = document.querySelector("#accountEmail");
   const syncStatus = document.querySelector("#syncStatus");
   const reminderToggle = document.querySelector("#reminderToggle");
@@ -135,8 +139,10 @@
   const refreshTimezoneButton = document.querySelector("#refreshTimezoneButton");
   const testNotificationButton = document.querySelector("#testNotificationButton");
   const reminderStatus = document.querySelector("#reminderStatus");
+  const notificationPrivacyInput = document.querySelector("#notificationPrivacyInput");
   const themeColor = document.querySelector("#themeColor");
   const themeChoices = document.querySelectorAll("[data-theme-choice]");
+  const appRoot = document.querySelector("#appRoot");
   const authScreen = document.querySelector("#authScreen");
   const loginTab = document.querySelector("#loginTab");
   const registerTab = document.querySelector("#registerTab");
@@ -250,8 +256,7 @@
   startDateWatcher();
   openRequestedDay();
   if (localPreview) {
-    authScreen.hidden = true;
-    document.body.classList.add("is-authenticated");
+    setAuthenticatedUi(true);
   } else {
     initializeAuth();
   }
@@ -322,6 +327,7 @@
   saveProfileNameButton.addEventListener("click", saveProfileName);
   syncNowButton.addEventListener("click", () => pullCloudState({ pushIfEmpty: true }));
   logoutButton.addEventListener("click", logoutAccount);
+  deleteDeviceDataButton.addEventListener("click", logoutAndDeleteDeviceData);
   loginTab.addEventListener("click", () => showAuthMode("login"));
   registerTab.addEventListener("click", () => showAuthMode("register"));
   loginForm.addEventListener("submit", loginAccount);
@@ -329,6 +335,7 @@
   reminderToggle.addEventListener("change", handleReminderToggle);
   morningTimeInput.addEventListener("change", saveReminderSettings);
   eveningTimeInput.addEventListener("change", saveReminderSettings);
+  notificationPrivacyInput.addEventListener("change", saveReminderSettings);
   refreshTimezoneButton.addEventListener("click", refreshReminderTimezone);
   testNotificationButton.addEventListener("click", sendTestNotification);
   closeCalendarEditorButton.addEventListener("click", closeCalendarEditor);
@@ -397,6 +404,13 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") handleAppResume();
   });
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data?.type === "CREST_PUSH_SUBSCRIPTION_CHANGED") {
+        refreshNotificationSubscription({ showStatus: true });
+      }
+    });
+  }
 
   async function initializeAuth() {
     const { data, error } = await authClient.auth.getSession();
@@ -439,8 +453,7 @@
       saveState({ skipCloud: true });
     }
 
-    authScreen.hidden = true;
-    document.body.classList.add("is-authenticated");
+    setAuthenticatedUi(true);
     renderProfilePhoto();
     renderAccount();
     startAutoSync();
@@ -479,12 +492,19 @@
 
   function showSignedOut(message, type) {
     currentSession = null;
-    authScreen.hidden = false;
-    document.body.classList.remove("is-authenticated");
+    setAuthenticatedUi(false);
     if (cloudPullTimer) clearInterval(cloudPullTimer);
     cloudPullTimer = null;
     renderAccount();
     setAuthStatus(message, type);
+  }
+
+  function setAuthenticatedUi(authenticated) {
+    authScreen.hidden = authenticated;
+    document.body.classList.toggle("is-authenticated", authenticated);
+    appRoot.inert = !authenticated;
+    if (authenticated) appRoot.removeAttribute("aria-hidden");
+    else appRoot.setAttribute("aria-hidden", "true");
   }
 
   function showAuthMode(mode) {
@@ -555,21 +575,109 @@
 
   async function logoutAccount() {
     logoutButton.disabled = true;
+    deleteDeviceDataButton.disabled = true;
     setSyncStatus("Выходим из аккаунта...", "busy");
     try {
-      if (state.notificationEndpoint && currentSession) {
-        await cloudRequest("unsubscribe", getSyncSettings({ silent: true }), { endpoint: state.notificationEndpoint });
+      captureActiveNotesDraft();
+      const synced = await pushCloudState({ forLogout: true });
+      if (!synced) {
+        setSyncStatus("Последние изменения не попали в облако, но останутся на этом устройстве.", "error");
       }
+      await revokeDeviceNotification({ strict: false });
+      const { error } = await authClient.auth.signOut({ scope: "local" });
+      if (error) throw error;
+      localStorage.removeItem(activeUserStorageKey);
+      window.location.reload();
+    } catch {
+      setSyncStatus("Не получилось выйти. Проверь интернет и повтори.", "error");
+      logoutButton.disabled = false;
+      deleteDeviceDataButton.disabled = false;
+    }
+  }
+
+  async function logoutAndDeleteDeviceData() {
+    const userId = currentSession?.user?.id;
+    if (!userId) return;
+    const confirmed = window.confirm(
+      "Удалить календарь, заметки, фото и настройки только с этого устройства? Сначала Crest сохранит всё в облако."
+    );
+    if (!confirmed) return;
+
+    logoutButton.disabled = true;
+    deleteDeviceDataButton.disabled = true;
+    setSyncStatus("Сначала сохраняю все изменения в облако...", "busy");
+    captureActiveNotesDraft();
+    const synced = await pushCloudState({ forLogout: true });
+    if (!synced) {
+      setSyncStatus("Удаление остановлено: не удалось безопасно сохранить данные в облако.", "error");
+      logoutButton.disabled = false;
+      deleteDeviceDataButton.disabled = false;
+      return;
+    }
+
+    const notificationsRevoked = await revokeDeviceNotification({ strict: true });
+    if (!notificationsRevoked) {
+      setSyncStatus("Удаление остановлено: не удалось отозвать уведомления этого устройства.", "error");
+      logoutButton.disabled = false;
+      deleteDeviceDataButton.disabled = false;
+      return;
+    }
+
+    const { error } = await authClient.auth.signOut({ scope: "local" });
+    if (error) {
+      setSyncStatus("Удаление остановлено: сессия аккаунта не закрылась.", "error");
+      logoutButton.disabled = false;
+      deleteDeviceDataButton.disabled = false;
+      return;
+    }
+
+    clearTimeout(cloudSaveTimer);
+    clearTimeout(notesCloudSaveTimer);
+    localStorage.removeItem(`crest-user-${userId}`);
+    localStorage.removeItem(activeUserStorageKey);
+    if (localStorage.getItem(legacyClaimedStorageKey) === userId) {
+      localStorage.removeItem(legacyStorageKey);
+      localStorage.removeItem(legacyClaimedStorageKey);
+    }
+    window.location.reload();
+  }
+
+  async function revokeDeviceNotification(options = {}) {
+    let serverRevoked = true;
+    let browserRevoked = true;
+    const settings = getSyncSettings({ silent: true });
+    if (state.notificationEndpoint) {
+      if (!settings) {
+        serverRevoked = false;
+      } else {
+        try {
+          await cloudRequest("unsubscribe", settings, { endpoint: state.notificationEndpoint });
+        } catch {
+          serverRevoked = false;
+        }
+      }
+    }
+
+    try {
       if ("serviceWorker" in navigator) {
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.getSubscription();
-        if (subscription) await subscription.unsubscribe();
+        if (subscription) browserRevoked = await subscription.unsubscribe();
       }
-      await authClient.auth.signOut({ scope: "local" });
-    } finally {
-      localStorage.removeItem(activeUserStorageKey);
-      window.location.reload();
+    } catch {
+      browserRevoked = false;
     }
+
+    if (serverRevoked || browserRevoked) {
+      state.remindersEnabled = false;
+    }
+    if (serverRevoked) {
+      delete state.notificationEndpoint;
+    }
+    if (serverRevoked || browserRevoked) {
+      localStorage.setItem(storageKey, JSON.stringify(state));
+    }
+    return options.strict ? serverRevoked && browserRevoked : true;
   }
 
   async function saveProfileName() {
@@ -1100,6 +1208,7 @@
     state.reminderMorning = validTime(state.reminderMorning) ? state.reminderMorning : "10:00";
     state.reminderEvening = validTime(state.reminderEvening) ? state.reminderEvening : "16:00";
     state.reminderTimezone = state.reminderTimezone || detectedTimezone();
+    state.notificationPrivacy = state.notificationPrivacy === "detailed" ? "detailed" : "neutral";
     state.remindersEnabled = Boolean(state.remindersEnabled);
     state.cloudRevision = Number(state.cloudRevision) || 0;
     state.contentStudio = normalizeContentStudio(state.contentStudio);
@@ -2406,6 +2515,7 @@
     profileNameInput.value = state.profileName || (user ? accountDisplayName(user) : "");
     syncNowButton.disabled = !user || isCloudBusy;
     logoutButton.disabled = !user;
+    deleteDeviceDataButton.disabled = !user;
     saveProfileNameButton.disabled = !user;
     if (user && !isCloudBusy) setSyncStatus("Аккаунт подключён. Изменения синхронизируются автоматически.", "ok");
   }
@@ -2421,10 +2531,16 @@
   }
 
   async function pushCloudState(options = {}) {
-    if (isCloudBusy && options.auto) return;
+    if (isCloudBusy) {
+      if (options.auto) return false;
+      if (options.forLogout) await waitForCloudIdle();
+      if (isCloudBusy) return false;
+    }
     const settings = getSyncSettings({ silent: options.auto });
-    if (!settings) return;
-    const requestPayload = exportProgressState();
+    if (!settings) return false;
+    captureActiveNotesDraft();
+    let requestPayload = exportProgressState();
+    const usesLegacyMigration = Boolean(state.syncCode);
 
     isCloudBusy = true;
     setSyncBusy(true);
@@ -2432,33 +2548,61 @@
     cloudSaveTimer = null;
 
     try {
-      const result = await cloudRequest("push", settings, {
-        payload: requestPayload,
-        baseRevision: state.cloudRevision || 0,
-        reminderDays: buildReminderDays(),
-        legacyCode: state.syncCode || undefined
-      });
-      captureActiveNotesDraft();
-      applyCloudState(
-        mergeCloudPayloadWithLocalChanges(result.payload, requestPayload),
-        result.updatedAt,
-        result.revision
-      );
-      clearLegacyCloudPassword();
-      if (!options.auto) {
-        setSyncStatus("Готово. Аккаунт синхронизирован.", "ok");
-      } else {
-        setSyncStatus("Сохранено в облако.", "ok");
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const result = await cloudRequest("push", settings, {
+            payload: requestPayload,
+            baseRevision: state.cloudRevision || 0,
+            reminderDays: buildReminderDays(),
+            ...(usesLegacyMigration ? { legacyCode: state.syncCode } : {})
+          }, { useLegacy: usesLegacyMigration });
+          captureActiveNotesDraft();
+          applyCloudState(
+            mergeCloudPayloadWithLocalChanges(result.payload, requestPayload),
+            result.updatedAt,
+            result.revision
+          );
+          if (usesLegacyMigration) clearLegacyCloudPassword();
+          if (!options.auto) {
+            setSyncStatus(
+              result.remindersUpdated === false
+                ? "Прогресс сохранён. Настройки напоминаний обновятся при следующей синхронизации."
+                : "Готово. Аккаунт синхронизирован.",
+              "ok"
+            );
+          } else {
+            setSyncStatus("Сохранено в облако.", "ok");
+          }
+          return true;
+        } catch (error) {
+          const conflict = error?.code === "REVISION_CONFLICT" ? error.details : null;
+          if (attempt > 0 || !conflict || !conflict.payload || !Number.isFinite(Number(conflict.revision))) throw error;
+          const merged = mergeConcurrentProgress(conflict.payload, exportProgressState());
+          applyCloudState(merged, conflict.updatedAt, Number(conflict.revision));
+          requestPayload = exportProgressState();
+        }
       }
-      return true;
     } catch (error) {
       if (!options.auto) {
-        setSyncStatus("Не получилось сохранить изменения. Проверь интернет.", "error");
+        setSyncStatus(
+          error?.code === "RATE_LIMITED"
+            ? "Слишком много запросов синхронизации. Подожди минуту и повтори."
+            : "Не получилось сохранить изменения. Проверь интернет.",
+          "error"
+        );
       }
       return false;
     } finally {
       isCloudBusy = false;
       setSyncBusy(false);
+    }
+    return false;
+  }
+
+  async function waitForCloudIdle(timeout = 8000) {
+    const startedAt = Date.now();
+    while (isCloudBusy && Date.now() - startedAt < timeout) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
 
@@ -2498,7 +2642,7 @@
       if (result.exists && (!state.cloudRevision || result.revision > state.cloudRevision)) {
         captureActiveNotesDraft();
         applyCloudState(
-          mergeCloudPayloadWithLocalChanges(result.payload, requestPayload),
+          mergeConcurrentProgress(result.payload, requestPayload),
           result.updatedAt,
           result.revision
         );
@@ -2575,6 +2719,96 @@
       if (!handledKeys.has(key)) preserveChangedValue(merged, current, baselineState, key);
     });
     return merged;
+  }
+
+  function mergeConcurrentProgress(serverValue, localValue) {
+    const server = serverValue && typeof serverValue === "object" ? serverValue : {};
+    const local = localValue && typeof localValue === "object" ? localValue : {};
+    const merged = { ...server, ...local };
+    merged.dayPlans = mergeConcurrentUpdatedMap(server.dayPlans, local.dayPlans);
+    merged.calendarData = mergeConcurrentCalendarData(server.calendarData, local.calendarData);
+
+    new Set([...Object.keys(server), ...Object.keys(local)])
+      .forEach((key) => {
+        if (isDateKey(key)) merged[key] = newerUpdatedValue(server[key], local[key]);
+      });
+
+    [
+      ["goals", "goalsUpdatedAt"],
+      ["profileName", "profileUpdatedAt"],
+      ["profilePhoto", "profileUpdatedAt"],
+      ["profilePhotoVersion", "profileUpdatedAt"],
+      ["theme", "themeUpdatedAt"],
+      ["calendars", "calendarsUpdatedAt"],
+      ["taskTypes", "taskTypesUpdatedAt"],
+      ["activeCalendarId", "activeCalendarUpdatedAt"],
+      ["contentStudio", "contentStudioUpdatedAt"],
+      ["reminderMorning", "reminderUpdatedAt"],
+      ["reminderEvening", "reminderUpdatedAt"],
+      ["reminderTimezone", "reminderUpdatedAt"],
+      ["notificationPrivacy", "reminderUpdatedAt"]
+    ].forEach(([field, timestampField]) => {
+      chooseConcurrentSection(merged, server, local, field, timestampField);
+    });
+
+    delete merged.lockedDays;
+    merged.schemaVersion = Math.max(Number(merged.schemaVersion) || 0, 34);
+    return merged;
+  }
+
+  function mergeConcurrentCalendarData(serverValue, localValue) {
+    const server = serverValue && typeof serverValue === "object" ? serverValue : {};
+    const local = localValue && typeof localValue === "object" ? localValue : {};
+    const result = {};
+    new Set([...Object.keys(server), ...Object.keys(local)]).forEach((calendarId) => {
+      const left = server[calendarId] && typeof server[calendarId] === "object" ? server[calendarId] : {};
+      const right = local[calendarId] && typeof local[calendarId] === "object" ? local[calendarId] : {};
+      if (!(calendarId in server)) {
+        result[calendarId] = JSON.parse(JSON.stringify(right));
+        return;
+      }
+      if (!(calendarId in local)) {
+        result[calendarId] = JSON.parse(JSON.stringify(left));
+        return;
+      }
+      const mergedStore = { ...left, ...right };
+      mergedStore.dayPlans = mergeConcurrentUpdatedMap(left.dayPlans, right.dayPlans);
+      mergedStore.entries = mergeConcurrentUpdatedMap(left.entries, right.entries);
+      const leftTime = Date.parse(String(left.updatedAt || "")) || 0;
+      const rightTime = Date.parse(String(right.updatedAt || "")) || 0;
+      mergedStore.updatedAt = rightTime >= leftTime ? right.updatedAt : left.updatedAt;
+      result[calendarId] = mergedStore;
+    });
+    return result;
+  }
+
+  function mergeConcurrentUpdatedMap(serverValue, localValue) {
+    const server = serverValue && typeof serverValue === "object" ? serverValue : {};
+    const local = localValue && typeof localValue === "object" ? localValue : {};
+    const result = {};
+    new Set([...Object.keys(server), ...Object.keys(local)])
+      .forEach((key) => { result[key] = newerUpdatedValue(server[key], local[key]); });
+    return result;
+  }
+
+  function newerUpdatedValue(left, right) {
+    if (right === undefined) return left;
+    if (left === undefined) return right;
+    const leftTime = Date.parse(left && typeof left === "object" ? String(left.updatedAt || "") : "") || 0;
+    const rightTime = Date.parse(right && typeof right === "object" ? String(right.updatedAt || "") : "") || 0;
+    return rightTime >= leftTime ? right : left;
+  }
+
+  function chooseConcurrentSection(target, server, local, field, timestampField) {
+    const serverTime = Date.parse(String(server[timestampField] || "")) || 0;
+    const localTime = Date.parse(String(local[timestampField] || "")) || 0;
+    if (localTime >= serverTime) {
+      target[field] = local[field];
+      target[timestampField] = local[timestampField];
+    } else {
+      target[field] = server[field];
+      target[timestampField] = server[timestampField];
+    }
   }
 
   function mergeChangedCalendarData(cloudValue, currentValue, baselineValue) {
@@ -2654,7 +2888,7 @@
     }, delay);
   }
 
-  async function cloudRequest(action, settings, data = {}) {
+  async function cloudRequest(action, settings, data = {}, options = {}) {
     const { data: sessionData, error: sessionError } = await authClient.auth.getSession();
     const session = sessionData?.session;
     if (sessionError || !session) {
@@ -2663,7 +2897,8 @@
       throw authError;
     }
     currentSession = session;
-    const response = await fetch(cloudFunctionUrl, {
+    const endpoint = options.useLegacy ? legacyCloudFunctionUrl : cloudFunctionUrl;
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         apikey: cloudPublishableKey,
@@ -2676,6 +2911,8 @@
     if (!response.ok) {
       const error = new Error(result.error || "Cloud request failed");
       error.code = result.code || "CLOUD_ERROR";
+      error.status = response.status;
+      error.details = result;
       throw error;
     }
     return result;
@@ -2732,10 +2969,12 @@
     morningTimeInput.value = state.reminderMorning || "10:00";
     eveningTimeInput.value = state.reminderEvening || "16:00";
     reminderTimezone.textContent = state.reminderTimezone || detectedTimezone();
+    notificationPrivacyInput.value = state.notificationPrivacy === "detailed" ? "detailed" : "neutral";
     const supported = pushSupported();
     reminderToggle.disabled = !supported;
     morningTimeInput.disabled = !supported;
     eveningTimeInput.disabled = !supported;
+    notificationPrivacyInput.disabled = !supported;
     testNotificationButton.disabled = !supported || !state.remindersEnabled;
     if (!supported) {
       setReminderStatus("Системные уведомления не поддерживаются этим режимом браузера.", "error");
@@ -2824,6 +3063,7 @@
     state.reminderMorning = validTime(morningTimeInput.value) ? morningTimeInput.value : "10:00";
     state.reminderEvening = validTime(eveningTimeInput.value) ? eveningTimeInput.value : "16:00";
     state.reminderTimezone = state.reminderTimezone || detectedTimezone();
+    state.notificationPrivacy = notificationPrivacyInput.value === "detailed" ? "detailed" : "neutral";
     state.reminderUpdatedAt = new Date().toISOString();
     saveState();
   }
@@ -2851,10 +3091,12 @@
     if (!settings) return;
     try {
       const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
+      let subscription = await registration.pushManager.getSubscription();
       if (!subscription) {
-        if (options.showStatus) setReminderStatus("Подписка устройства потеряна. Выключи и снова включи напоминания.", "error");
-        return;
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+        });
       }
       state.notificationEndpoint = subscription.endpoint;
       localStorage.setItem(storageKey, JSON.stringify(state));
@@ -2872,7 +3114,8 @@
       timezone: state.reminderTimezone,
       morningTime: state.reminderMorning,
       eveningTime: state.reminderEvening,
-      reminderDays: buildReminderDays()
+      reminderDays: buildReminderDays(),
+      privacyMode: state.notificationPrivacy || "neutral"
     });
   }
 
@@ -3633,7 +3876,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=42").then((registration) => registration.update()).catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=43").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();
