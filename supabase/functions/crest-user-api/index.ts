@@ -1,6 +1,7 @@
 import { createSupabaseContext } from "npm:@supabase/server@1.4.1";
 import webpush from "npm:web-push@3.6.7";
 import { corsHeaders, jsonResponse, methodNotAllowed, preflight, publicError } from "../_shared/http.ts";
+import { serverSecrets } from "../_shared/server-secrets.ts";
 import {
   HttpError,
   readJsonRequest,
@@ -22,7 +23,7 @@ export default {
     }
 
     try {
-      requireOwner(context.userClaims.id);
+      await requireOwner(context.supabase);
       const body = await readJsonRequest(request);
       const input = validateUserAction(body);
       if (!RATE_LIMITED_ACTIONS.has(input.action)) throw new HttpError(400, "UNKNOWN_ACTION", "Unknown action");
@@ -32,7 +33,7 @@ export default {
       if (input.action === "push") return await pushProgress(context.supabase, input, cors.headers);
       if (input.action === "subscribe") return await subscribe(context.supabase, context.userClaims.id, input, cors.headers);
       if (input.action === "unsubscribe") return await unsubscribe(context.supabase, input.endpoint, cors.headers);
-      return await testNotification(context.supabase, input.endpoint, cors.headers);
+      return await testNotification(context.supabase, context.supabaseAdmin, input.endpoint, cors.headers);
     } catch (error) {
       logSafeFailure(error);
       return publicError(error, cors.headers);
@@ -144,7 +145,7 @@ async function unsubscribe(supabase: any, endpoint: string, headers: HeadersInit
   return jsonResponse({ ok: true }, 200, headers);
 }
 
-async function testNotification(supabase: any, endpoint: string, headers: HeadersInit) {
+async function testNotification(supabase: any, supabaseAdmin: any, endpoint: string, headers: HeadersInit) {
   const { data, error } = await supabase
     .from("push_subscriptions")
     .select("subscription")
@@ -154,7 +155,7 @@ async function testNotification(supabase: any, endpoint: string, headers: Header
   if (error) throw databaseError();
   if (!data) throw new HttpError(404, "NOT_FOUND", "Subscription not found");
 
-  await sendPush(data.subscription, {
+  await sendPush(supabaseAdmin, data.subscription, {
     title: "Crest работает",
     body: "Тестовое уведомление доставлено. Напоминания готовы.",
     tag: "crest-test",
@@ -170,32 +171,21 @@ async function consumeRateLimit(supabase: any, action: string) {
   if (data !== true) throw new HttpError(429, "RATE_LIMITED", "Too many requests");
 }
 
-function requireOwner(userId: string) {
-  const ownerId = Deno.env.get("CREST_OWNER_USER_ID") || "";
-  if (!ownerId) throw new HttpError(503, "OWNER_NOT_CONFIGURED", "Crest owner is not configured");
-  if (!constantTimeEqual(userId, ownerId)) throw new HttpError(403, "OWNER_REQUIRED", "Crest owner access required");
+async function requireOwner(supabase: any) {
+  const { data, error } = await supabase.from("progress_sync").select("sync_id").maybeSingle();
+  if (error) throw databaseError();
+  if (!data) throw new HttpError(403, "OWNER_REQUIRED", "Crest owner access required");
 }
 
-async function sendPush(subscription: Record<string, unknown>, payload: Record<string, unknown>) {
-  const publicKey = Deno.env.get("VAPID_PUBLIC_KEY") || "";
-  const privateKey = Deno.env.get("VAPID_PRIVATE_KEY") || "";
-  const subject = Deno.env.get("VAPID_SUBJECT") || "";
-  if (!publicKey || !privateKey || !subject) {
-    throw new HttpError(503, "PUSH_NOT_CONFIGURED", "Push notifications are not configured");
-  }
-  webpush.setVapidDetails(subject, publicKey, privateKey);
+async function sendPush(
+  supabaseAdmin: any,
+  subscription: Record<string, unknown>,
+  payload: Record<string, unknown>
+) {
+  const secrets = await serverSecrets(supabaseAdmin, ["vapid_public_key", "vapid_private_key"]);
+  const subject = Deno.env.get("VAPID_SUBJECT") || "mailto:arman22a@users.noreply.github.com";
+  webpush.setVapidDetails(subject, secrets.vapid_public_key, secrets.vapid_private_key);
   await webpush.sendNotification(subscription as any, JSON.stringify(payload), { TTL: 300 });
-}
-
-function constantTimeEqual(left: string, right: string) {
-  const leftBytes = new TextEncoder().encode(left);
-  const rightBytes = new TextEncoder().encode(right);
-  const length = Math.max(leftBytes.length, rightBytes.length);
-  let difference = leftBytes.length ^ rightBytes.length;
-  for (let index = 0; index < length; index += 1) {
-    difference |= (leftBytes[index] || 0) ^ (rightBytes[index] || 0);
-  }
-  return difference === 0;
 }
 
 function appUrl() {

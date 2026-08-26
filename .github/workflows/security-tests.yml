@@ -18,6 +18,7 @@ jobs:
           node-version: 22
       - run: node --check script.js
       - run: node --check sw.js
+      - run: find supabase/functions -name '*.ts' -print0 | xargs -0 -n1 node --experimental-strip-types --check
       - run: node --experimental-strip-types --test tests/*.test.mjs
 
   database:

@@ -11,7 +11,8 @@ test("client and Edge sources contain no private key material", () => {
     "index.html", "script.js", "sw.js",
     "supabase/functions/crest-api/index.ts",
     "supabase/functions/crest-user-api/index.ts",
-    "supabase/functions/crest-cron-dispatch/index.ts"
+    "supabase/functions/crest-cron-dispatch/index.ts",
+    "supabase/functions/_shared/server-secrets.ts"
   ];
   const source = files.map(read).join("\n");
   assert.doesNotMatch(source, /sb_secret_[A-Za-z0-9_-]{12,}/);
@@ -24,7 +25,8 @@ test("function authentication modes stay split", () => {
   assert.match(config, /\[functions\.crest-user-api\][\s\S]*?verify_jwt = true/);
   assert.match(config, /\[functions\.crest-cron-dispatch\][\s\S]*?verify_jwt = false/);
   assert.match(read("supabase/functions/crest-user-api/index.ts"), /auth: "user"/);
-  assert.match(read("supabase/functions/crest-cron-dispatch/index.ts"), /CREST_CRON_SECRET/);
+  assert.match(read("supabase/functions/crest-cron-dispatch/index.ts"), /cron_secret_hash/);
+  assert.match(read("supabase/functions/crest-user-api/index.ts"), /await requireOwner\(context\.supabase\)/);
   assert.match(read("supabase/functions/crest-api/index.ts"), /Deno\.serve/);
   assert.doesNotMatch(read("supabase/functions/_shared/http.ts"), /x-cron-secret/i);
 });

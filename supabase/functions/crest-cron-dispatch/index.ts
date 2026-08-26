@@ -1,6 +1,7 @@
 import { createSupabaseContext } from "npm:@supabase/server@1.4.1";
 import webpush from "npm:web-push@3.6.7";
 import { jsonResponse, methodNotAllowed, publicError } from "../_shared/http.ts";
+import { constantTimeEqual, serverSecrets, sha256 } from "../_shared/server-secrets.ts";
 import {
   HttpError,
   readJsonRequest,
@@ -14,12 +15,12 @@ export default {
   async fetch(request: Request) {
     if (request.method !== "POST") return methodNotAllowed({});
     try {
-      verifyCronSecret(request.headers.get("x-cron-secret") || "");
-      validateCronAction(await readJsonRequest(request, 4_096));
       const { data: context, error } = await createSupabaseContext(request, { auth: "none" });
       if (error || !context?.supabaseAdmin) {
         throw new HttpError(503, "SERVICE_NOT_CONFIGURED", "Reminder service is not configured");
       }
+      await verifyCronSecret(context.supabaseAdmin, request.headers.get("x-cron-secret") || "");
+      validateCronAction(await readJsonRequest(request, 4_096));
       return jsonResponse(await dispatchReminders(context.supabaseAdmin));
     } catch (error) {
       logSafeFailure(error);
@@ -59,7 +60,7 @@ async function dispatchReminders(supabase: any) {
       const claimed = await claimReminderSlot(supabase, subscription.id, sentColumn, local.date);
       if (!claimed) continue;
       try {
-        await sendPush(pushSubscription, payload);
+        await sendPush(supabase, pushSubscription, payload);
         summary.sent += 1;
       } catch (pushError) {
         const status = Number((pushError as { statusCode?: number })?.statusCode) || 0;
@@ -104,31 +105,21 @@ async function releaseReminderSlot(
     .eq(column, claimedDate);
 }
 
-async function sendPush(subscription: Record<string, unknown>, payload: Record<string, unknown>) {
-  const publicKey = Deno.env.get("VAPID_PUBLIC_KEY") || "";
-  const privateKey = Deno.env.get("VAPID_PRIVATE_KEY") || "";
-  const subject = Deno.env.get("VAPID_SUBJECT") || "";
-  if (!publicKey || !privateKey || !subject) throw new Error("push configuration missing");
-  webpush.setVapidDetails(subject, publicKey, privateKey);
+async function sendPush(supabaseAdmin: any, subscription: Record<string, unknown>, payload: Record<string, unknown>) {
+  const secrets = await serverSecrets(supabaseAdmin, ["vapid_public_key", "vapid_private_key"]);
+  const subject = Deno.env.get("VAPID_SUBJECT") || "mailto:arman22a@users.noreply.github.com";
+  webpush.setVapidDetails(subject, secrets.vapid_public_key, secrets.vapid_private_key);
   await webpush.sendNotification(subscription as any, JSON.stringify(payload), { TTL: 300 });
 }
 
-function verifyCronSecret(candidate: string) {
-  const expected = Deno.env.get("CREST_CRON_SECRET") || "";
-  if (!expected || !candidate || !constantTimeEqual(candidate, expected)) {
+async function verifyCronSecret(supabaseAdmin: any, candidate: string) {
+  if (!candidate) {
     throw new HttpError(401, "CRON_AUTH_REQUIRED", "Scheduler authentication failed");
   }
-}
-
-function constantTimeEqual(left: string, right: string) {
-  const leftBytes = new TextEncoder().encode(left);
-  const rightBytes = new TextEncoder().encode(right);
-  const length = Math.max(leftBytes.length, rightBytes.length);
-  let difference = leftBytes.length ^ rightBytes.length;
-  for (let index = 0; index < length; index += 1) {
-    difference |= (leftBytes[index] || 0) ^ (rightBytes[index] || 0);
+  const secrets = await serverSecrets(supabaseAdmin, ["cron_secret_hash"]);
+  if (!constantTimeEqual(await sha256(candidate), secrets.cron_secret_hash)) {
+    throw new HttpError(401, "CRON_AUTH_REQUIRED", "Scheduler authentication failed");
   }
-  return difference === 0;
 }
 
 function plainObject(value: unknown): Record<string, any> | null {

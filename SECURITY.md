@@ -9,12 +9,13 @@ voice input, and function calling are intentionally outside this work.
 - The browser contains only the Supabase project URL, publishable key, and public
   VAPID key. These values are intentionally public and carry no privileged access.
 - `crest-user-api` requires the platform JWT check, `@supabase/server@1.4.1` user
-  authentication, a server-side owner ID, database allowlisting, and RLS.
+  authentication, database allowlisting, and RLS.
 - `crest-cron-dispatch` is a separate service endpoint. It accepts only the
   scheduler secret, uses constant-time comparison, and has no user actions.
 - The old mixed `crest-api` remains available only during migration and rollback.
-- VAPID private material and scheduler credentials belong in Supabase Edge Function
-  Secrets or Vault. They must never be placed in the repository or browser.
+- VAPID private material and scheduler credentials remain in Supabase server-only
+  storage and are read only through the administrative server context. They must
+  never be placed in the repository, browser, response, or technical logs.
 
 ## Database protection
 
