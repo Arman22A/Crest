@@ -37,10 +37,11 @@ select ok(
 );
 
 set local role anon;
-select results_eq(
+select throws_ok(
   $$select count(*) from public.progress_sync$$,
-  array[0::bigint],
-  'anonymous callers cannot read progress'
+  '42501',
+  null,
+  'anonymous callers have no table privilege to read progress'
 );
 select throws_ok(
   $$select * from public.crest_push_progress(1, '{}'::jsonb)$$,
