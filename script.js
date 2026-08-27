@@ -7,7 +7,7 @@
   const bootstrapUserId = localStorage.getItem(activeUserStorageKey);
   const storageKey = bootstrapUserId ? `crest-user-${bootstrapUserId}` : legacyStorageKey;
   const supabaseUrl = "https://bclhwefsswxtqtwzppik.supabase.co";
-  const secureCloudRollout = false;
+  const secureCloudRollout = true;
   const legacyCloudFunctionUrl = "https://bclhwefsswxtqtwzppik.supabase.co/functions/v1/crest-api";
   const secureCloudFunctionUrl = "https://bclhwefsswxtqtwzppik.supabase.co/functions/v1/crest-user-api";
   const cloudFunctionUrl = secureCloudRollout ? secureCloudFunctionUrl : legacyCloudFunctionUrl;
@@ -3876,7 +3876,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=43").then((registration) => registration.update()).catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=44").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();

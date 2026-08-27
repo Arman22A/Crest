@@ -31,8 +31,11 @@ test("function authentication modes stay split", () => {
   assert.doesNotMatch(read("supabase/functions/_shared/http.ts"), /x-cron-secret/i);
 });
 
-test("secure API rollout remains off until remote deployment is approved", () => {
-  assert.match(read("script.js"), /const secureCloudRollout = false;/);
+test("secure API rollout uses the protected endpoint and keeps the rollback URL", () => {
+  const client = read("script.js");
+  assert.match(client, /const secureCloudRollout = true;/);
+  assert.match(client, /const legacyCloudFunctionUrl = .*\/crest-api";/);
+  assert.match(client, /const secureCloudFunctionUrl = .*\/crest-user-api";/);
 });
 
 test("the planner stays hidden and inert until authentication succeeds", () => {
