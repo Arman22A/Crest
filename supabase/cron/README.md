@@ -1,12 +1,15 @@
 # Reminder cron
 
-Production currently runs `crest-dispatch-reminders` once per minute. The live job
-calls the legacy mixed function and reads its scheduler secret from Vault.
+Production runs `crest-dispatch-reminders` once per minute and reads its scheduler
+secret from Vault.
 
-The security rollout will create a separate call to `crest-cron-dispatch`. The
-scheduler secret must remain in Supabase Secrets or Vault and must never be written
-directly into a migration, cron command, repository file, response, or log.
+`20260827000000_switch_reminder_cron_dispatch.sql` changes only the Edge Function
+path from `crest-api` to `crest-cron-dispatch`. It preserves the existing command,
+schedule, active state, and Vault lookup. The scheduler secret must remain in
+Supabase Secrets or Vault and must never be written directly into a migration,
+repository file, response, or log.
 
-The existing cron job is deliberately not changed by this branch. Its exact current
-configuration is stored only in the private recovery point. Changing it is a remote
-production action that requires explicit approval after the new function is tested.
+The migration is idempotent and fails closed when an existing job contains an
+unexpected command. Rollback uses the same `cron.alter_job` operation to replace
+`/crest-cron-dispatch` with `/crest-api`; the exact command remains only in Supabase
+and the private recovery point.

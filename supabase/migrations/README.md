@@ -4,10 +4,13 @@
 from the production database audited on 2026-08-25. It intentionally contains no
 rows, owner UUID, secret values, or cron command.
 
-`20260825001000_security_foundation.sql` is the prepared security change. It has not
-been applied to production. It creates a private owner-seed operation but does not
-run it automatically. The operation resolves the sole confirmed active Auth user
-inside PostgreSQL and fails closed if that assumption is no longer true.
+`20260825001000_security_foundation.sql` establishes owner-only RLS and optimistic
+concurrency. Production received the reviewed migration after a private backup and
+the isolated CI checks passed.
+
+`20260827000000_switch_reminder_cron_dispatch.sql` preserves the existing Cron job
+and Vault lookup while switching only the Edge Function path to the dedicated,
+secret-protected dispatcher.
 
 The six historical production migration statements are retained only in the private
 recovery point because their earliest statement assumes that `progress_sync` already

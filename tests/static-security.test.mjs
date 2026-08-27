@@ -31,6 +31,14 @@ test("function authentication modes stay split", () => {
   assert.doesNotMatch(read("supabase/functions/_shared/http.ts"), /x-cron-secret/i);
 });
 
+test("reminder cron migration preserves the protected server secret", () => {
+  const migration = read("supabase/migrations/20260827000000_switch_reminder_cron_dispatch.sql");
+  assert.match(migration, /cron\.alter_job/);
+  assert.match(migration, /replace\(reminder_job\.command, '\/crest-api', '\/crest-cron-dispatch'\)/);
+  assert.doesNotMatch(migration, /x-cron-secret/i);
+  assert.doesNotMatch(migration, /vault\.decrypted_secrets/i);
+});
+
 test("secure API rollout uses the protected endpoint and keeps the rollback URL", () => {
   const client = read("script.js");
   assert.match(client, /const secureCloudRollout = true;/);
